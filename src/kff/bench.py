@@ -98,6 +98,19 @@ class BenchResult:
             "scan_failures": self.scan_failures,
             "by_type": {t: _rates(c) for t, c in sorted(by_type.items())},
             "all": _rates(total),
+            # The first wrong readings, to see what goes wrong, not just how often.
+            "wrong": [
+                {
+                    "field": o.field_id,
+                    "type": o.type,
+                    "written": o.truth,
+                    "read": o.read,
+                    "flagged": o.flagged,
+                    "reason": o.reason,
+                }
+                for o in self.outcomes
+                if not o.ok
+            ][:40],
         }
 
 
