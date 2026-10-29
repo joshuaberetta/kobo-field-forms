@@ -88,7 +88,14 @@ create() {
         doctl compute firewall update "$fw_id" --name "$NAME-fw" --tag-names "$NAME" \
             --inbound-rules "$inbound" --outbound-rules "$outbound" >/dev/null
     fi
-    local ip; ip=$(droplet_ip)
+    # The address can lag a moment behind "active".
+    local ip=
+    for _ in $(seq 30); do
+        ip=$(doctl compute droplet get "$id" --format PublicIPv4 --no-header)
+        [[ -n "$ip" ]] && break
+        sleep 2
+    done
+    [[ -n "$ip" ]] || { echo "Droplet $id has no public IP yet." >&2; exit 1; }
     echo "Waiting for SSH and cloud-init on $ip..."
     local tries=0
     until ssh -p "$SSH_PORT" "${SSH_OPTS[@]}" "root@$ip" 'cloud-init status --wait >/dev/null 2>&1; docker info >/dev/null 2>&1'; do
