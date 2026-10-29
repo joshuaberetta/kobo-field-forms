@@ -1,0 +1,23 @@
+# Script registry: everything script-specific lives here (plan: Scripts). Adding a script
+# means an entry, its font files in render/fonts/, and test data; no code changes.
+#
+# languages: ISO 639 codes written in this script (the code in a Kobo translation name,
+#   e.g. "Arabic (ar)"). A language not listed anywhere uses `latin`, with a warning.
+# fonts: Typst font families, tried in order for each glyph.
+# digits: the digit sets people may write in number boxes; all normalise to ASCII.
+# text_entry: "comb" (a box per letter) or "lines" (cursive scripts don't split into boxes).
+
+[latin]
+languages = ["en", "fr", "es", "pt", "de", "it", "nl", "sw", "ha", "yo", "ig", "so", "id",
+             "ms", "tl", "vi", "tr", "pl", "ro", "ht", "rw", "ln", "mg", "wo", "ff"]
+fonts = ["Noto Sans"]
+direction = "ltr"
+digits = ["0123456789"]
+text_entry = "comb"
+
+[arabic]
+languages = ["ar", "fa", "ur", "ps", "ku", "ckb", "sd", "ug"]
+fonts = ["Noto Naskh Arabic"]
+direction = "rtl"
+digits = ["0123456789", "٠١٢٣٤٥٦٧٨٩", "۰۱۲۳۴۵۶۷۸۹"]
+text_entry = "lines"
