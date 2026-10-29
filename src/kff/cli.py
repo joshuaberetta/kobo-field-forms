@@ -12,6 +12,8 @@ from kff.config import Settings
 from kff.errors import KffError
 from kff.fetch import fetch_form, parse_asset_uid
 from kff.kobo.client import KoboClient
+from kff.read.sheet import read_sheet
+from kff.read.vlm import VlmConfig, VlmReader
 from kff.render.options import (
     CHOICE_LAYOUTS,
     LANGUAGE_LAYOUTS,
@@ -19,10 +21,11 @@ from kff.render.options import (
     TEXT_ENTRIES,
     RenderOptions,
 )
-from kff.render.pdf import merge_pdfs, render_png, render_set
+from kff.render.pdf import Sheet, merge_pdfs, render_png, render_set
 from kff.scan.extract import crops, overlay
 from kff.scan.pipeline import scan_file, sheet_status
 from kff.store import FormVersion, Store, new_batch_id
+from kff.submit import submit_sheet
 
 
 def _summary(form: FormVersion) -> str:
@@ -192,6 +195,93 @@ def cmd_web(args: argparse.Namespace) -> None:
     uvicorn.run(create_app(settings, extra), host=args.host, port=args.port, log_level="warning")
 
 
+def _sheet_ids(store: Store, codes: list[str], every: bool) -> list[str]:
+    """Sheet codes (`4F3A-91C2`) or ids → ids of scanned sheets."""
+    scanned = [s["sheet_id"] for s in store.scanned_sheets()]
+    if every:
+        return scanned
+    if not codes:
+        raise KffError("Name sheets by code (e.g. 4F3A-91C2), or use --all.")
+    out = []
+    for code in codes:
+        key = code.replace("-", "").lower()
+        found = [sid for sid in scanned if sid.startswith(key)]
+        if len(found) != 1:
+            raise KffError(f"{code}: {'no' if not found else 'more than one'} scanned sheet.")
+        out.append(found[0])
+    return out
+
+
+def cmd_sheets(args: argparse.Namespace) -> None:
+    settings = Settings.from_env(need_token=False)
+    with Store(settings.home) as store:
+        for s in store.scanned_sheets():
+            readings = store.readings(s["sheet_id"])
+            review = sum(1 for r in readings.values() if r["needs_review"] and not r["reviewed"])
+            sub = store.submission(s["sheet_id"])
+            state = (
+                f"submitted ({sub['status']})"
+                if sub
+                else ("not read" if not readings else f"{review} to review")
+            )
+            print(
+                f"{Sheet(s['sheet_id'], 0).code}  {s['pages_found']}/{s['pages_per_sheet']} pages  "
+                f"{len(readings)} fields read  {state}  {s['name']}"
+            )
+
+
+def cmd_read(args: argparse.Namespace) -> None:
+    settings = Settings.from_env(need_token=False)
+    config = VlmConfig.from_env()
+    vlm = VlmReader(config) if config else None
+    try:
+        with Store(settings.home) as store:
+            for sid in _sheet_ids(store, args.sheets, args.all):
+                readings = read_sheet(store, sid, vlm)
+                review = [r for r in readings if r.needs_review]
+                print(f"{Sheet(sid, 0).code}: {len(readings)} fields, {len(review)} to review")
+                if args.verbose_fields:
+                    for r in readings:
+                        flag = (
+                            "  CHECK: " + (r.reason or "low confidence") if r.needs_review else ""
+                        )
+                        print(f"  {r.field_id} = {r.value!r} ({r.method} {r.confidence:.2f}){flag}")
+    finally:
+        if vlm:
+            vlm.close()
+    if not config:
+        print("note: no KFF_VLM_URL set, so written text goes to review unread.", file=sys.stderr)
+
+
+def cmd_submit(args: argparse.Namespace) -> None:
+    settings = Settings.from_env()
+    failed = 0
+    with KoboClient(settings) as client, Store(settings.home) as store:
+        for sid in _sheet_ids(store, args.sheets, args.all):
+            code = Sheet(sid, 0).code
+            if store.submission(sid) and not args.again:
+                print(f"{code}: already submitted (use --again to resend)")
+                continue
+            try:
+                done = submit_sheet(store, client, sid, accept_flagged=args.accept_flagged)
+            except KffError as err:
+                failed += 1
+                print(f"{code}: not submitted: {err}")
+                continue
+            what = "submitted" if done.status == 201 else "already in Kobo (duplicate)"
+            print(f"{code}: {what}  {done.instance_id}")
+            if done.dropped:
+                print(f"  dropped answers to hidden questions: {', '.join(done.dropped)}")
+    if failed:
+        raise KffError(f"{failed} sheet(s) not submitted.")
+
+
+def cmd_e2e(args: argparse.Namespace) -> None:
+    from kff.e2e import main_e2e
+
+    main_e2e(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kff", description="Paper forms for KoboToolbox.")
     parser.add_argument("-v", "--verbose", action="store_true", help="log requests")
@@ -248,6 +338,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dpi", type=int, default=200, help="rasterising resolution for PDFs")
     p.add_argument("--debug", help="write overlays and field crops to this directory")
     p.set_defaults(func=cmd_scan)
+
+    p = sub.add_parser("sheets", help="scanned sheets: pages, readings, review, submitted")
+    p.set_defaults(func=cmd_sheets)
+
+    p = sub.add_parser("read", help="read the answers on scanned sheets")
+    p.add_argument("sheets", nargs="*", help="sheet codes, e.g. 4F3A-91C2")
+    p.add_argument("--all", action="store_true")
+    p.add_argument("--fields", dest="verbose_fields", action="store_true", help="list readings")
+    p.set_defaults(func=cmd_read)
+
+    p = sub.add_parser("submit", help="submit read (and reviewed) sheets to Kobo")
+    p.add_argument("sheets", nargs="*", help="sheet codes, e.g. 4F3A-91C2")
+    p.add_argument("--all", action="store_true")
+    p.add_argument(
+        "--accept-flagged",
+        action="store_true",
+        help="submit as read, even with flags or missing answers (testing)",
+    )
+    p.add_argument("--again", action="store_true", help="resend sheets already submitted")
+    p.set_defaults(func=cmd_submit)
+
+    p = sub.add_parser("e2e", help="the whole loop on synthetic sheets against a real server")
+    p.add_argument("--profiles", default="all", help="comma-separated, or 'all'")
+    p.add_argument("--sheets", type=int, default=3, help="sheets per profile")
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--offline", action="store_true", help="no Kobo: render, scan and read only")
+    p.add_argument("--keep-project", action="store_true", help="don't delete the test project")
+    p.add_argument("--report", default="out/e2e-report.json")
+    p.set_defaults(func=cmd_e2e)
 
     p = sub.add_parser("web", help="local web interface: design, preview, print, scan")
     p.add_argument("--host", default="127.0.0.1")

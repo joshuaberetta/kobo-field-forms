@@ -145,10 +145,11 @@
       at(place(top + left, dx: cx * 1mm, dy: cy * 1mm,
         ellipse(width: 2 * f.rx * 1mm, height: 2 * f.ry * 1mm, fill: pen, stroke: none)))
     } else if f.k == "cross" {
-      let s = 0.6pt + pen
+      // `top + left` explicitly: a bare place() anchors at the start edge, which is the
+      // right on an Arabic page.
       at({
-        place(line(start: (0.5mm, 0.5mm), end: ((f.w - 0.5) * 1mm, (f.h - 0.5) * 1mm), stroke: 1.3pt + pen))
-        place(line(start: ((f.w - 0.5) * 1mm, 0.5mm), end: (0.5mm, (f.h - 0.5) * 1mm), stroke: 1.3pt + pen))
+        place(top + left, line(start: (0.5mm, 0.5mm), end: ((f.w - 0.5) * 1mm, (f.h - 0.5) * 1mm), stroke: 1.3pt + pen))
+        place(top + left, line(start: ((f.w - 0.5) * 1mm, 0.5mm), end: (0.5mm, (f.h - 0.5) * 1mm), stroke: 1.3pt + pen))
       })
     } else if f.k == "text" {
       at(box(width: (f.w - 2 * f.dx) * 1mm, height: f.h * 1mm,

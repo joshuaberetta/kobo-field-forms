@@ -1,6 +1,6 @@
 # kobo-field-forms — PoC plan
 
-Status: **in progress.** Milestones 1, 2, 3, 2b and a local web interface done (2026-10-29, branches `milestone-1` … `web`).
+Status: **in progress.** Milestones 1–8 done locally, and `kff e2e` passes against kf (2026-10-29). Left: the droplet run, real paper (9), kobo-in-a-box (10).
 
 Progress:
 - **Milestone 1 (skeleton + fetch): done.** `kff fetch | forms | show`, SQLite store
@@ -123,6 +123,74 @@ Progress:
   - Found on the way: on an Arabic page the footer's sheet code came out reversed
     (`3411-FA39`): `text(dir: ltr)` around content doesn't set the *paragraph*
     direction; `set text(dir: ltr)` inside the block does.
+- **Milestone 5 (recognition): done.** `read/omr.py`, `read/digits.py` (+ `models/`,
+  trained by `scripts/train_digits.py`), `read/vlm.py`, `read/sheet.py`, `bench.py`;
+  `readings` table (schema 4); `kff read`, `kff sheets`.
+  - **OMR:** ink share inside the bubble (crop inset 0.8 mm). Filled ≈0.95, crossed
+    ≈0.3, blank 0.00; marked ≥ 0.18, empty < 0.06, between is flagged. Two marked on a
+    select_one: the darker wins if 2.5× darker (flagged), else flagged as ambiguous.
+  - **Found:** a box filled solid has no paper left in its crop, so estimating "paper"
+    from the crop read full fills as blank (3 of 12 select_ones wrong, unflagged). The
+    paper level now has a floor of 180.
+  - **Digits: HOG (324) + 14×14 pixels + ink-box size → a 2-layer `cv2.ml.ANN_MLP`**, 20
+    classes (Western and Eastern Arabic), each mapped to its ASCII value; the sheet's
+    `digit_sets` (from `scripts.toml`, in the layout) decide which classes count. No
+    PyTorch: the model is ~1 MB in the repo and runs anywhere OpenCV does.
+    **OpenCV 5 dropped `cv2.ml` and `HOGDescriptor`**, so OpenCV is pinned `<5`.
+  - Training data: MNIST (real handwriting) + Noto Sans / Noto Naskh renders, augmented.
+    The synthetic sheets' handwriting fonts are kept out, so bench numbers aren't the
+    training set. ⚠ Eastern Arabic digits have no real handwriting in training yet.
+  - **Text: any OpenAI-compatible vision model** (`KFF_VLM_URL`), one call per field: a
+    strip of the letter boxes, or the lines area, with the question label, languages and
+    "transcribe, don't translate"; JSON reply `{text, confidence}`. Without it, written
+    text is flagged (never guessed). Blank areas are detected by inked-pixel count, not
+    share (a short name on a full-width line is < 1% of it).
+  - **Readings a person reviewed are never overwritten** by a re-read.
+  - **OpenCV's `ANN_MLP` was replaced by a numpy MLP** (522 → 256 ReLU → 20 softmax,
+    Adam, 20 epochs, 509 KB): `cv2.ml` reached 93.9% on the MNIST test set, the numpy
+    one **98.7%** (99.1% held out). Inference is two matrix products.
+  - **Measured on synthetic sheets** (`kff e2e --offline`, 3 sheets × 4 profiles, the
+    handwriting fonts unseen in training, scans degraded): bubbles, acknowledge,
+    dates, times, decimals, geopoints and integers 100% on Latin sheets. On Arabic
+    sheets Eastern Arabic digits read worse (60–90% per type: Naskh renders aren't Ruqaa
+    handwriting), **but every wrong digit reading was flagged**: wrong-and-unflagged was
+    0.0% in every profile. Without a vision model, text is only "blank" or "flagged".
+  - **Found:** printed box outlines and ruled lines counted as writing in lines/box
+    areas (a blank signature box read as signed). Long straight strokes (≥ 5 mm) are now
+    removed before counting ink; areas are cropped at their edge.
+  - **Found (generator):** on Arabic pages crosses were drawn beside the box: a bare
+    `place()` anchors at the *start* edge, which is the right in RTL. The reader was
+    right; the ground truth was wrong.
+- **Milestone 6 (assemble + submit): done.** `submit.py`, `kobo/deploy.py`,
+  `KoboClient.submit`; `submissions` table; `kff submit`.
+  - Assembly drops answers to questions skip logic hides (repeatedly, as one hidden
+    answer can hide another), flags missing required answers and broken constraints
+    (`form/xpath.py`), and leaves out repeat entries nobody filled in.
+  - XML as kobo-mcp's `build_xml`: root = asset uid with `version="<count> (<date>)"`,
+    `formhub/uuid`, groups nested, one element per repeat entry, `__version__` = version
+    uid, `meta/instanceID` = `uuid:<sheet id>`. Image answers (signatures) are the box's
+    crop as a PNG part.
+  - **Verified on kf** (`tests/live/test_live_submit.py`): create + deploy a `kff-e2e-*`
+    project, submit (201), resubmit (202 duplicate), read back: every value equal, the
+    attachment present; the project is deleted after.
+- **Milestone 7 (review UI): done**, in the web interface: "Review & submit" lists
+  scanned sheets (pages, read, to check, submitted); a sheet page shows every field's
+  scan next to its reading, problems first, editable, with "checked" ticks; "Read
+  again" keeps reviewed answers; "Submit" is disabled until nothing needs checking.
+  The web app takes the token only from its own startup environment.
+- **Milestone 8 (droplet e2e): built.** `kff e2e` (`e2e.py`), `Dockerfile`,
+  `compose.yaml` (+ `vlm` profile: llama.cpp with Gemma 4 E4B), `deploy/droplet.sh`
+  (`create | push | vlm | test | web | ssh | destroy | all`; asks before billing; SSH
+  from your IP only; the token piped on stdin). The e2e fails on any scan failure, any
+  difference between what was sent and what Kobo stored, a resubmission that isn't a
+  202, or bubble/digit accuracy under `THRESHOLDS`.
+  - **Passed against kf** (2026-10-29, `kff e2e --sheets 2`, ~12 s): 8 sheets in 4
+    profiles submitted; every stored value equals what was sent; resubmission 202; the
+    project deleted. `--accept-flagged` (auto mode) submits as read, flags and missing
+    answers included, so the comparison shows what was missed.
+  - **Found:** kf returned a transient 502 to a submission. Submissions are now retried
+    on 5xx like GETs: the instanceID makes a repeat a duplicate, never a second record.
+  - Not run yet: on a droplet (`deploy/droplet.sh all`), and with the `vlm` profile.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.

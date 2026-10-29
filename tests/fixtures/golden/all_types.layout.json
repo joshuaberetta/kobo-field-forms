@@ -10,6 +10,9 @@
  "languages": [
   "English (en)"
  ],
+ "digit_sets": [
+  "0123456789"
+ ],
  "options": {
   "paper": "a4",
   "orientation": "portrait",
@@ -1983,6 +1986,7 @@
    "xpath": "full_name",
    "type": "text",
    "number": 1,
+   "label": "Full name",
    "widget": "comb",
    "required": true,
    "segments": [
@@ -1998,6 +2002,7 @@
    "xpath": "age",
    "type": "integer",
    "number": 2,
+   "label": "Age in years",
    "widget": "comb",
    "required": true,
    "segments": [
@@ -2013,6 +2018,7 @@
    "xpath": "consent",
    "type": "select_one",
    "number": 3,
+   "label": "Do you agree to take part?",
    "widget": "choices",
    "required": true,
    "multiple": false,
@@ -2025,6 +2031,7 @@
    "xpath": "hh/district",
    "type": "select_one",
    "number": 4,
+   "label": "District",
    "widget": "choices",
    "required": false,
    "multiple": false,
@@ -2041,6 +2048,7 @@
    "xpath": "hh/district_other",
    "type": "text",
    "number": 5,
+   "label": "Other district",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2056,6 +2064,7 @@
    "xpath": "hh/income",
    "type": "decimal",
    "number": 6,
+   "label": "Monthly income (USD)",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2077,6 +2086,7 @@
    "xpath": "hh/assets",
    "type": "select_multiple",
    "number": 7,
+   "label": "Which of these does the household own?",
    "widget": "choices",
    "required": false,
    "multiple": true,
@@ -2093,6 +2103,7 @@
    "xpath": "hh/phones",
    "type": "integer",
    "number": 8,
+   "label": "How many mobile phones?",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2108,6 +2119,7 @@
    "xpath": "hh/visit_date",
    "type": "date",
    "number": 9,
+   "label": "Date of visit",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2135,6 +2147,7 @@
    "xpath": "hh/visit_time",
    "type": "time",
    "number": 10,
+   "label": "Time of visit",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2156,6 +2169,7 @@
    "xpath": "hh/location",
    "type": "geopoint",
    "number": 11,
+   "label": "Location of the home",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2201,6 +2215,7 @@
    "xpath": "hh/members/member_name",
    "type": "text",
    "number": 12,
+   "label": "Name",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2216,6 +2231,7 @@
    "xpath": "hh/members/member_age",
    "type": "integer",
    "number": 13,
+   "label": "Age",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2231,6 +2247,7 @@
    "xpath": "hh/members/member_sex",
    "type": "select_one",
    "number": 14,
+   "label": "Sex",
    "widget": "choices",
    "required": false,
    "multiple": false,
@@ -2243,6 +2260,7 @@
    "xpath": "hh/members/member_name",
    "type": "text",
    "number": 12,
+   "label": "Name",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2258,6 +2276,7 @@
    "xpath": "hh/members/member_age",
    "type": "integer",
    "number": 13,
+   "label": "Age",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2273,6 +2292,7 @@
    "xpath": "hh/members/member_sex",
    "type": "select_one",
    "number": 14,
+   "label": "Sex",
    "widget": "choices",
    "required": false,
    "multiple": false,
@@ -2285,6 +2305,7 @@
    "xpath": "comments",
    "type": "text",
    "number": 15,
+   "label": "Any other comments?",
    "widget": "lines",
    "required": false
   },
@@ -2292,6 +2313,7 @@
    "xpath": "rating",
    "type": "range",
    "number": 16,
+   "label": "Rate the service from 0 to 10",
    "widget": "comb",
    "required": false,
    "segments": [
@@ -2307,6 +2329,7 @@
    "xpath": "confirm",
    "type": "acknowledge",
    "number": 17,
+   "label": "I confirm the answers are correct",
    "widget": "choices",
    "required": false,
    "multiple": false,
@@ -2318,6 +2341,7 @@
    "xpath": "signature",
    "type": "image",
    "number": 18,
+   "label": "Signature",
    "widget": "box",
    "required": false
   }

@@ -231,6 +231,10 @@ def render(
         "form": base["form"],
         "language": model.language,
         "languages": [lang.name for lang in model.languages],
+        # Digit sets people may write on this sheet (scripts.toml), for the digit reader.
+        "digit_sets": list(
+            dict.fromkeys(d for lang in model.languages for d in scripts()[lang.script].digits)
+        ),
         "options": options.to_json(),
         "geometry": geometry.to_json(),
         "paper": {
@@ -354,6 +358,7 @@ def _fields(model: PrintModel) -> dict[str, Any]:
             "xpath": q.xpath,
             "type": q.type,
             "number": q.number,
+            "label": " / ".join(t.text for t in q.label),
             "widget": w.kind,
             "required": q.required,
         }
