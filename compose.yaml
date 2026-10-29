@@ -27,11 +27,26 @@ services:
     image: ghcr.io/ggml-org/llama.cpp:server
     volumes:
       - /opt/models:/models:ro
-    command: >-
-      -m /models/${VLM_MODEL_FILE:-gemma-4-E4B-it-Q4_0.gguf}
-      --mmproj /models/${VLM_MMPROJ_FILE:-mmproj-gemma-4-E4B-it-Q8_0.gguf}
-      --host 0.0.0.0 --port 8080 -c 8192 -t ${VLM_THREADS:-4}
-      --chat-template-kwargs {"enable_thinking":false}
+    # Loopback only, so the droplet can check it's up; kff reaches it as http://vlm:8080.
+    ports:
+      - "127.0.0.1:8081:8080"
+    # A list, not a string: compose would split a string like a shell and strip the
+    # JSON's quotes.
+    command:
+      - -m
+      - /models/${VLM_MODEL_FILE:-gemma-4-E4B-it-Q4_0.gguf}
+      - --mmproj
+      - /models/${VLM_MMPROJ_FILE:-mmproj-gemma-4-E4B-it-Q8_0.gguf}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - "8192"
+      - -t
+      - "${VLM_THREADS:-4}"
+      - --chat-template-kwargs
+      - '{"enable_thinking":false}'
 
 volumes:
   kff-data:

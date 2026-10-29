@@ -122,8 +122,12 @@ vlm() {
         remote "test -s /opt/models/$file || curl -fL --retry 3 -o /opt/models/$file https://huggingface.co/$repo/resolve/main/$file"
     done
     remote 'cd /opt/kff && VLM_THREADS=$(nproc) docker compose --profile vlm up -d vlm'
-    echo "Waiting for the vision model to load..."
-    remote 'until docker compose -f /opt/kff/compose.yaml exec -T vlm curl -fs http://localhost:8080/health >/dev/null 2>&1; do sleep 5; done' || true
+    echo "Waiting for the vision model to load (up to 15 minutes)..."
+    if ! remote 'for i in $(seq 180); do curl -fs http://127.0.0.1:8081/health >/dev/null && exit 0; sleep 5; done; exit 1'; then
+        remote 'cd /opt/kff && docker compose --profile vlm logs --tail 30 vlm' || true
+        echo "The vision model didn't come up." >&2
+        return 1
+    fi
     echo "Vision model up; deploy/droplet.sh test will use it."
 }
 
