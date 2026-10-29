@@ -201,10 +201,12 @@ Progress:
       reads a gap between boxes as a space (`MENSAH` → `MENS AH`); on Arabic lines it
       returns plausible wrong words (`مصدر الماء بعيد` → `رضا داود بعيد`). Multi-line
       comments came back empty (flagged, so safe).
-    - Next: tell the model how many letters were written and where the gaps are (blank
-      cells are known from ink), so spaces come from the boxes, not the model; and don't
-      trust its own confidence: flag text whose length doesn't match the inked boxes, or
-      review all text.
+    - **Fixed the same day** (`read/sheet.py`: `box_pattern`, `fit_to_boxes`): the prompt
+      gives the model the boxes' pattern (`#### ######`); the spaces come from the empty
+      boxes, not the model; a reading with the wrong letter count is flagged; text on
+      lines is always flagged; the model's confidence only lowers trust. **Re-run on a
+      fresh droplet: wrong-and-unflagged 0.0% in every profile, and text correct went
+      up to 73–87%** (re-spacing repaired `MENS AH`); 362 s.
   - Found on the way: this network blocks outgoing port 22, so `deploy/droplet.sh` has
     `SSH_PORT=443` (as kobo-in-a-box), and waits for the droplet's IP.
 - **Homepage (asked for 2026-10-29): done.** `/` is a guide for users in kobo-dash's
