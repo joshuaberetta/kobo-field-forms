@@ -10,8 +10,9 @@ import numpy as np
 from kff.scan.register import PX_PER_MM, Registered
 
 # Cells and bubbles are cropped inside their printed outline, so the outline itself
-# doesn't read as ink. Areas (lines, boxes) keep a margin for writing that strays out.
-INSET_MM = {"cell": 0.7, "choice": 0.8, "area": -1.0}
+# doesn't read as ink. Areas (lines, boxes) are cropped at their edge; the reader removes
+# their printed lines (read.sheet.without_rules).
+INSET_MM = {"cell": 0.7, "choice": 0.8, "area": 0.0}
 
 
 @dataclass
@@ -25,8 +26,12 @@ def page_marks(registered: Registered) -> list[dict[str, Any]]:
 
 
 def crop(registered: Registered, mark: dict[str, Any]) -> np.ndarray:
-    inset = INSET_MM.get(mark["k"], 0.0)
-    img = registered.image
+    return crop_image(registered.image, mark)
+
+
+def crop_image(img: np.ndarray, mark: dict[str, Any], inset: float | None = None) -> np.ndarray:
+    """An answer area cut from an upright page image (at PX_PER_MM)."""
+    inset = INSET_MM.get(mark["k"], 0.0) if inset is None else inset
     x0 = max(0, round((mark["x"] + inset) * PX_PER_MM))
     y0 = max(0, round((mark["y"] + inset) * PX_PER_MM))
     x1 = min(img.shape[1], round((mark["x"] + mark["w"] - inset) * PX_PER_MM))
@@ -36,9 +41,14 @@ def crop(registered: Registered, mark: dict[str, Any]) -> np.ndarray:
 
 def crops(registered: Registered) -> dict[str, list[Crop]]:
     """Field id → its crops on this page, in order (cells by segment and index)."""
+    return crops_from(registered.image, registered.layout, registered.ref.page)
+
+
+def crops_from(image: np.ndarray, layout: dict[str, Any], page: int) -> dict[str, list[Crop]]:
     out: dict[str, list[Crop]] = defaultdict(list)
-    for mark in page_marks(registered):
-        out[mark["f"]].append(Crop(mark, crop(registered, mark)))
+    for mark in layout["marks"]:
+        if mark["page"] == page:
+            out[mark["f"]].append(Crop(mark, crop_image(image, mark)))
     for items in out.values():
         items.sort(key=lambda c: (c.mark.get("s", 0), c.mark.get("i", 0)))
     return dict(out)
