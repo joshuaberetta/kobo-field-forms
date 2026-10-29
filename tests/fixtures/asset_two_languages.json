@@ -1,0 +1,303 @@
+{
+ "asset": {
+  "uid": "aTestForm0123456789abc",
+  "name": "Test form",
+  "asset_type": "survey",
+  "has_deployment": true,
+  "deployment_status": "deployed",
+  "deployment__uuid": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+  "version_id": "vDraftNotDeployed000000",
+  "deployed_version_id": "vDeployed2000000000000",
+  "content": {
+   "schema": "1",
+   "survey": [
+    {
+     "type": "text",
+     "name": "name",
+     "$xpath": "name",
+     "$kuid": "k1",
+     "label": [
+      "What is your name?",
+      "ما اسمك؟"
+     ]
+    },
+    {
+     "type": "integer",
+     "name": "age",
+     "$xpath": "age",
+     "$kuid": "k2",
+     "label": [
+      "How old are you?",
+      "كم عمرك؟"
+     ]
+    },
+    {
+     "type": "select_one",
+     "select_from_list_name": "yn",
+     "name": "consent",
+     "$xpath": "consent",
+     "$kuid": "k3",
+     "label": [
+      "Do you agree?",
+      "هل توافق؟"
+     ]
+    },
+    {
+     "type": "text",
+     "name": "draft_only",
+     "$xpath": "draft_only",
+     "$kuid": "k9",
+     "label": [
+      "Not deployed",
+      "غير منشور"
+     ]
+    }
+   ],
+   "choices": [
+    {
+     "list_name": "yn",
+     "name": "yes",
+     "$kuid": "c1",
+     "label": [
+      "Yes",
+      "نعم"
+     ]
+    },
+    {
+     "list_name": "yn",
+     "name": "no",
+     "$kuid": "c2",
+     "label": [
+      "No",
+      "لا"
+     ]
+    }
+   ],
+   "settings": {},
+   "translated": [
+    "label"
+   ],
+   "translations": [
+    "English (en)",
+    "Arabic (ar)"
+   ]
+  }
+ },
+ "versions": [
+  {
+   "uid": "vDeployed2000000000000",
+   "url": "https://kf.kobotoolbox.org/api/v2/assets/aTestForm0123456789abc/versions/vDeployed2000000000000/?format=json",
+   "content_hash": "abc123",
+   "date_deployed": "2026-10-01T10:00:00.000000Z",
+   "date_modified": "2026-10-01T10:00:00.000000Z",
+   "version_number": "2",
+   "content": {
+    "schema": "1",
+    "survey": [
+     {
+      "type": "text",
+      "name": "name",
+      "$xpath": "name",
+      "$kuid": "k1",
+      "label": [
+       "What is your name?",
+       "ما اسمك؟"
+      ]
+     },
+     {
+      "type": "integer",
+      "name": "age",
+      "$xpath": "age",
+      "$kuid": "k2",
+      "label": [
+       "How old are you?",
+       "كم عمرك؟"
+      ]
+     },
+     {
+      "type": "select_one",
+      "select_from_list_name": "yn",
+      "name": "consent",
+      "$xpath": "consent",
+      "$kuid": "k3",
+      "label": [
+       "Do you agree?",
+       "هل توافق؟"
+      ]
+     }
+    ],
+    "choices": [
+     {
+      "list_name": "yn",
+      "name": "yes",
+      "$kuid": "c1",
+      "label": [
+       "Yes",
+       "نعم"
+      ]
+     },
+     {
+      "list_name": "yn",
+      "name": "no",
+      "$kuid": "c2",
+      "label": [
+       "No",
+       "لا"
+      ]
+     }
+    ],
+    "settings": {},
+    "translated": [
+     "label"
+    ],
+    "translations": [
+     "English (en)",
+     "Arabic (ar)"
+    ]
+   }
+  },
+  {
+   "uid": "vDeployed1000000000000",
+   "url": "https://kf.kobotoolbox.org/api/v2/assets/aTestForm0123456789abc/versions/vDeployed2000000000000/?format=json",
+   "content_hash": "old111",
+   "date_deployed": "2026-09-01T10:00:00.000000Z",
+   "date_modified": "2026-10-01T10:00:00.000000Z",
+   "version_number": "1",
+   "content": {
+    "schema": "1",
+    "survey": [
+     {
+      "type": "text",
+      "name": "name",
+      "$xpath": "name",
+      "$kuid": "k1",
+      "label": [
+       "What is your name?",
+       "ما اسمك؟"
+      ]
+     },
+     {
+      "type": "integer",
+      "name": "age",
+      "$xpath": "age",
+      "$kuid": "k2",
+      "label": [
+       "How old are you?",
+       "كم عمرك؟"
+      ]
+     }
+    ],
+    "choices": [
+     {
+      "list_name": "yn",
+      "name": "yes",
+      "$kuid": "c1",
+      "label": [
+       "Yes",
+       "نعم"
+      ]
+     },
+     {
+      "list_name": "yn",
+      "name": "no",
+      "$kuid": "c2",
+      "label": [
+       "No",
+       "لا"
+      ]
+     }
+    ],
+    "settings": {},
+    "translated": [
+     "label"
+    ],
+    "translations": [
+     "English (en)",
+     "Arabic (ar)"
+    ]
+   }
+  },
+  {
+   "uid": "vDraftNotDeployed000000",
+   "url": "https://kf.kobotoolbox.org/api/v2/assets/aTestForm0123456789abc/versions/vDeployed2000000000000/?format=json",
+   "content_hash": "abc123",
+   "date_deployed": null,
+   "date_modified": "2026-10-01T10:00:00.000000Z",
+   "version_number": null,
+   "content": {
+    "schema": "1",
+    "survey": [
+     {
+      "type": "text",
+      "name": "name",
+      "$xpath": "name",
+      "$kuid": "k1",
+      "label": [
+       "What is your name?",
+       "ما اسمك؟"
+      ]
+     },
+     {
+      "type": "integer",
+      "name": "age",
+      "$xpath": "age",
+      "$kuid": "k2",
+      "label": [
+       "How old are you?",
+       "كم عمرك؟"
+      ]
+     },
+     {
+      "type": "select_one",
+      "select_from_list_name": "yn",
+      "name": "consent",
+      "$xpath": "consent",
+      "$kuid": "k3",
+      "label": [
+       "Do you agree?",
+       "هل توافق؟"
+      ]
+     },
+     {
+      "type": "text",
+      "name": "draft_only",
+      "$xpath": "draft_only",
+      "$kuid": "k9",
+      "label": [
+       "Not deployed",
+       "غير منشور"
+      ]
+     }
+    ],
+    "choices": [
+     {
+      "list_name": "yn",
+      "name": "yes",
+      "$kuid": "c1",
+      "label": [
+       "Yes",
+       "نعم"
+      ]
+     },
+     {
+      "list_name": "yn",
+      "name": "no",
+      "$kuid": "c2",
+      "label": [
+       "No",
+       "لا"
+      ]
+     }
+    ],
+    "settings": {},
+    "translated": [
+     "label"
+    ],
+    "translations": [
+     "English (en)",
+     "Arabic (ar)"
+    ]
+   }
+  }
+ ]
+}

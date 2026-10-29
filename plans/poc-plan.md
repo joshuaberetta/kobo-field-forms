@@ -1,6 +1,18 @@
 # kobo-field-forms — PoC plan
 
-Status: **draft** (2026-10-29).
+Status: **in progress.** Milestone 1 done (2026-10-29, branch `milestone-1`).
+
+Progress:
+- **Milestone 1 (skeleton + fetch): done.** `kff fetch | forms | show`, SQLite store
+  (`store.py`), sync KPI client ported from kobo-mcp (`kobo/client.py`), CI. Live tests
+  (`tests/live/`) pass on kf, including a project whose latest save isn't deployed: fetch
+  takes the deployed version's content.
+  - Found: the asset list and detail both carry `deployed_version_id`, so fetch needs only
+    two requests (asset, then `versions/{deployed_version_id}/`). A version detail has
+    `version_number` and `date_deployed` (null for an undeployed save), which the
+    submission's root `version` attribute will need (milestone 6).
+  - Changed from the plan: the store keeps the form content as JSON in SQLite rather than
+    as separate files: it's small, and one file is easier to copy to an offline box.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.
