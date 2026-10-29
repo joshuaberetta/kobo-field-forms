@@ -191,6 +191,13 @@ Progress:
   - **Found:** kf returned a transient 502 to a submission. Submissions are now retried
     on 5xx like GETs: the instanceID makes a repeat a duplicate, never a second record.
   - Not run yet: on a droplet (`deploy/droplet.sh all`), and with the `vlm` profile.
+- **Homepage (asked for 2026-10-29): done.** `/` is a guide for users in kobo-dash's
+  (and kobo-mcp's) homepage style, its CSS, fonts and logos copied into
+  `web/static/site/`; the forms list moved to `/forms`. Screenshots in
+  `web/static/home/` are the real app on a demo store with synthetic sheets, made by
+  `scripts/screenshots.py` (Playwright, a dev dependency, pinned to kobo-mcp's 1.64.0 so
+  it shares the installed Chromium). The guide states the limits plainly: unreviewed
+  translations, Eastern Arabic digits, text needing a vision model.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.

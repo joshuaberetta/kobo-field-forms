@@ -93,6 +93,11 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
     # -- pages --------------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
+    def home(request: Request) -> HTMLResponse:
+        """The overview for people using it: what it does, how, with screenshots."""
+        return templates.TemplateResponse(request, "home.html", {})
+
+    @app.get("/forms", response_class=HTMLResponse)
     def index(request: Request, error: str | None = None) -> HTMLResponse:
         with store() as s:
             forms = list(s.list_forms(settings.server))
@@ -117,7 +122,7 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
             with KoboClient(live) as client, store() as s:
                 form = s.save_form(fetch_form(client, live.server, uid))
         except (KffError, ConfigError) as err:
-            return RedirectResponse(f"/?error={_q(str(err))}", status_code=303)
+            return RedirectResponse(f"/forms?error={_q(str(err))}", status_code=303)
         return RedirectResponse(f"/forms/{form.asset_uid}/{form.version_uid}", status_code=303)
 
     @app.get("/forms/{asset_uid}/{version_uid}", response_class=HTMLResponse)

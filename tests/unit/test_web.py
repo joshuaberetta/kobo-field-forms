@@ -34,7 +34,9 @@ def client(tmp_path):
 
 
 def test_pages(client):
-    index = client.get("/")
+    home = client.get("/")
+    assert home.status_code == 200 and "Paper forms" in home.text
+    index = client.get("/forms")
     assert index.status_code == 200 and "All question types" in index.text
     assert "KOBO_TOKEN" in index.text  # no token: fetching is explained, not offered
     designer = client.get(f"/forms/{ASSET}/{VERSION}")
@@ -89,7 +91,7 @@ def test_render_download_and_scan_back(client):
     assert batch["sheets"] == 2 and batch["pages"] % 2 == 0
     pdf = client.get(batch["url"])
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
-    assert batch["batch"] in client.get("/").text
+    assert batch["batch"] in client.get("/forms").text
 
     scanned = client.post(
         "/api/scans",
@@ -148,3 +150,16 @@ def test_review_flow(client):
     # No token in this app's environment: submitting explains why it can't.
     result = client.post(f"/sheets/{sheet_id}/submit", follow_redirects=True)
     assert "Not submitted" in result.text
+
+
+def test_homepage_assets_are_served(client):
+    import re
+
+    html = client.get("/").text
+    assets = set(re.findall(r'(?:src|href)="(/static/[^"]+)"', html))
+    assert any(a.endswith(".jpg") for a in assets) and "/static/site/home.css" in assets
+    for path in assets:
+        assert client.get(path).status_code == 200, path
+    css = client.get("/static/site/home.css").text
+    for font in re.findall(r'url\("(/static/[^"]+)"\)', css):
+        assert client.get(font).status_code == 200, font
