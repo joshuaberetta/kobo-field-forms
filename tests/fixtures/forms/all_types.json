@@ -1,0 +1,363 @@
+{
+ "schema": "1",
+ "survey": [
+  {
+   "type": "note",
+   "name": "intro",
+   "label": [
+    "Thank you for taking part.",
+    "شكرا لمشاركتك."
+   ]
+  },
+  {
+   "type": "text",
+   "name": "full_name",
+   "label": [
+    "Full name",
+    "الاسم الكامل"
+   ],
+   "required": true,
+   "hint": [
+    "As on the ID card",
+    "كما في بطاقة الهوية"
+   ]
+  },
+  {
+   "type": "integer",
+   "name": "age",
+   "label": [
+    "Age in years",
+    "العمر بالسنوات"
+   ],
+   "constraint": ". >= 0 and . <= 120",
+   "required": true
+  },
+  {
+   "type": "select_one",
+   "name": "consent",
+   "label": [
+    "Do you agree to take part?",
+    "هل توافق على المشاركة؟"
+   ],
+   "select_from_list_name": "yn",
+   "required": true
+  },
+  {
+   "type": "begin_group",
+   "name": "hh",
+   "label": [
+    "Household",
+    "الأسرة"
+   ],
+   "relevant": "${consent} = 'yes'"
+  },
+  {
+   "type": "select_one",
+   "name": "district",
+   "label": [
+    "District",
+    "المنطقة"
+   ],
+   "select_from_list_name": "district"
+  },
+  {
+   "type": "text",
+   "name": "district_other",
+   "label": [
+    "Other district",
+    "منطقة أخرى"
+   ],
+   "relevant": "${district} = 'other'"
+  },
+  {
+   "type": "decimal",
+   "name": "income",
+   "label": [
+    "Monthly income (USD)",
+    "الدخل الشهري (دولار)"
+   ],
+   "constraint": ". < 10000"
+  },
+  {
+   "type": "select_multiple",
+   "name": "assets",
+   "label": [
+    "Which of these does the household own?",
+    "أي من هذه تملكها الأسرة؟"
+   ],
+   "select_from_list_name": "assets"
+  },
+  {
+   "type": "integer",
+   "name": "phones",
+   "label": [
+    "How many mobile phones?",
+    "كم هاتفا محمولا؟"
+   ],
+   "relevant": "selected(${assets}, 'phone')",
+   "constraint": ". <= 20"
+  },
+  {
+   "type": "date",
+   "name": "visit_date",
+   "label": [
+    "Date of visit",
+    "تاريخ الزيارة"
+   ]
+  },
+  {
+   "type": "time",
+   "name": "visit_time",
+   "label": [
+    "Time of visit",
+    "وقت الزيارة"
+   ]
+  },
+  {
+   "type": "geopoint",
+   "name": "location",
+   "label": [
+    "Location of the home",
+    "موقع المنزل"
+   ]
+  },
+  {
+   "type": "begin_repeat",
+   "name": "members",
+   "label": [
+    "Household member",
+    "فرد من الأسرة"
+   ],
+   "repeat_count": "2"
+  },
+  {
+   "type": "text",
+   "name": "member_name",
+   "label": [
+    "Name",
+    "الاسم"
+   ]
+  },
+  {
+   "type": "integer",
+   "name": "member_age",
+   "label": [
+    "Age",
+    "العمر"
+   ],
+   "constraint": ". <= 120"
+  },
+  {
+   "type": "select_one",
+   "name": "member_sex",
+   "label": [
+    "Sex",
+    "الجنس"
+   ],
+   "select_from_list_name": "sex"
+  },
+  {
+   "type": "end_repeat"
+  },
+  {
+   "type": "end_group"
+  },
+  {
+   "type": "text",
+   "name": "comments",
+   "label": [
+    "Any other comments?",
+    "أي تعليقات أخرى؟"
+   ],
+   "appearance": "multiline"
+  },
+  {
+   "type": "range",
+   "name": "rating",
+   "label": [
+    "Rate the service from 0 to 10",
+    "قيّم الخدمة من 0 إلى 10"
+   ],
+   "parameters": "start=0 end=10 step=1"
+  },
+  {
+   "type": "acknowledge",
+   "name": "confirm",
+   "label": [
+    "I confirm the answers are correct",
+    "أؤكد صحة الإجابات"
+   ]
+  },
+  {
+   "type": "image",
+   "name": "signature",
+   "label": [
+    "Signature",
+    "التوقيع"
+   ],
+   "appearance": "signature"
+  },
+  {
+   "type": "audio",
+   "name": "voice_note",
+   "label": [
+    "Voice note",
+    "ملاحظة صوتية"
+   ]
+  },
+  {
+   "type": "calculate",
+   "name": "is_adult",
+   "calculation": "${age} >= 18"
+  },
+  {
+   "type": "start",
+   "name": "start"
+  },
+  {
+   "type": "end",
+   "name": "end"
+  }
+ ],
+ "choices": [
+  {
+   "list_name": "yn",
+   "name": "yes",
+   "label": [
+    "Yes",
+    "نعم"
+   ]
+  },
+  {
+   "list_name": "yn",
+   "name": "no",
+   "label": [
+    "No",
+    "لا"
+   ]
+  },
+  {
+   "list_name": "district",
+   "name": "d1",
+   "label": [
+    "North",
+    "الشمال"
+   ]
+  },
+  {
+   "list_name": "district",
+   "name": "d2",
+   "label": [
+    "South",
+    "الجنوب"
+   ]
+  },
+  {
+   "list_name": "district",
+   "name": "d3",
+   "label": [
+    "East",
+    "الشرق"
+   ]
+  },
+  {
+   "list_name": "district",
+   "name": "d4",
+   "label": [
+    "West",
+    "الغرب"
+   ]
+  },
+  {
+   "list_name": "district",
+   "name": "d5",
+   "label": [
+    "Central",
+    "الوسط"
+   ]
+  },
+  {
+   "list_name": "district",
+   "name": "other",
+   "label": [
+    "Other",
+    "أخرى"
+   ]
+  },
+  {
+   "list_name": "assets",
+   "name": "phone",
+   "label": [
+    "Mobile phone",
+    "هاتف محمول"
+   ]
+  },
+  {
+   "list_name": "assets",
+   "name": "radio",
+   "label": [
+    "Radio",
+    "راديو"
+   ]
+  },
+  {
+   "list_name": "assets",
+   "name": "tv",
+   "label": [
+    "Television",
+    "تلفاز"
+   ]
+  },
+  {
+   "list_name": "assets",
+   "name": "bicycle",
+   "label": [
+    "Bicycle",
+    "دراجة"
+   ]
+  },
+  {
+   "list_name": "assets",
+   "name": "motorbike",
+   "label": [
+    "Motorbike",
+    "دراجة نارية"
+   ]
+  },
+  {
+   "list_name": "assets",
+   "name": "fridge",
+   "label": [
+    "Refrigerator",
+    "ثلاجة"
+   ]
+  },
+  {
+   "list_name": "sex",
+   "name": "female",
+   "label": [
+    "Female",
+    "أنثى"
+   ]
+  },
+  {
+   "list_name": "sex",
+   "name": "male",
+   "label": [
+    "Male",
+    "ذكر"
+   ]
+  }
+ ],
+ "settings": {
+  "default_language": "English (en)"
+ },
+ "translated": [
+  "label",
+  "hint"
+ ],
+ "translations": [
+  "English (en)",
+  "Arabic (ar)"
+ ]
+}
