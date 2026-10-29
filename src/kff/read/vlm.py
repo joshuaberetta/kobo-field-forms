@@ -48,12 +48,18 @@ class TextReading:
 _JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 
-def prompt_for(label: str, languages: list[str], boxes: bool) -> str:
-    how = (
-        "The answer is written in capital letters, one per box; an empty box is a space."
-        if boxes
-        else "The answer is handwritten on the line(s)."
-    )
+def prompt_for(label: str, languages: list[str], boxes: bool, pattern: str | None = None) -> str:
+    if boxes and pattern:
+        letters = pattern.count("#")
+        how = (
+            "The answer is written in capital letters, one per box. These boxes have a letter "
+            f"in them, with a space for each empty box: `{pattern}` ({letters} letters). "
+            "Reply with exactly those letters, a space where a box is empty."
+        )
+    elif boxes:
+        how = "The answer is written in capital letters, one per box; an empty box is a space."
+    else:
+        how = "The answer is handwritten on the line(s)."
     return (
         "This image is cut from a scanned paper form.\n"
         f"Question: {label}\n"

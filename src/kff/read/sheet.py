@@ -121,9 +121,10 @@ def read_field(fid: str, info: dict[str, Any], items: list[Crop], ctx: Context) 
         by_seg.setdefault(c.mark["s"], []).append(c)
     if any(s["charset"] == "text" for s in segments.values()):
         cells = [c.image for s in sorted(by_seg) for c in by_seg[s]]
-        if all(_blank(c, 0.012) for c in cells):
+        pattern = box_pattern([_blank(c, 0.012) for c in cells])
+        if not pattern:
             return Reading(fid, None, 0.9, "ink")
-        return _text(fid, info, [comb_strip(cells)], ctx, boxes=True)
+        return _text(fid, info, [comb_strip(cells)], ctx, boxes=True, pattern=pattern)
 
     parts: list[tuple[dict[str, Any], str | None]] = []
     confidence = 1.0
@@ -156,12 +157,62 @@ def read_field(fid: str, info: dict[str, Any], items: list[Crop], ctx: Context) 
     )
 
 
-def _text(fid: str, info: dict[str, Any], images: list[np.ndarray], ctx: Context, boxes: bool):
+def box_pattern(blank: list[bool]) -> str:
+    """Letter boxes as `#` (written in) and ` ` (empty), outer empties dropped:
+    `#### ######` is four letters, a gap, six."""
+    return "".join(" " if b else "#" for b in blank).strip()
+
+
+def fit_to_boxes(text: str, pattern: str) -> tuple[str, str | None]:
+    """Spaces come from the boxes, not the reader: if it read as many letters as boxes are
+    written in, put them in the boxes' words; if not, say so (and keep its text)."""
+    letters = [ch for ch in text if not ch.isspace()]
+    words = pattern.split()
+    need = sum(len(w) for w in words)
+    if len(letters) != need:
+        return text, f"read {len(letters)} letters, but {need} boxes are written in"
+    out, i = [], 0
+    for w in words:
+        out.append("".join(letters[i : i + len(w)]))
+        i += len(w)
+    return " ".join(out), None
+
+
+# The reader's own confidence can only lower trust: in the droplet e2e its wrong readings
+# (a dropped letter, a made-up word) came back at 0.9 like its right ones.
+UNSURE_BELOW = 0.5
+LINES_CONFIDENCE = 0.6
+
+
+def _text(
+    fid: str,
+    info: dict[str, Any],
+    images: list[np.ndarray],
+    ctx: Context,
+    boxes: bool,
+    pattern: str | None = None,
+) -> Reading:
     if ctx.vlm is None:
         return Reading(fid, None, 0.0, "none", "written, but no text reader is configured")
-    r = ctx.vlm.read(images[0], prompt_for(info.get("label") or fid, ctx.languages, boxes))
+    label = info.get("label") or fid
+    r = ctx.vlm.read(images[0], prompt_for(label, ctx.languages, boxes, pattern))
+    if not r.text:
+        return Reading(fid, None, 0.0, "vlm", "written, but the text reader found nothing")
+    detail = {"read": r.text, "reader_confidence": r.confidence}
+    if boxes and pattern:
+        text, reason = fit_to_boxes(r.text, pattern)
+        detail["boxes"] = pattern
+        if reason is None and r.confidence < UNSURE_BELOW:
+            reason = "the text reader isn't sure"
+        return Reading(fid, text, min(r.confidence, 0.9), "vlm", reason, detail)
+    # Writing on lines can't be checked against anything: a person always looks.
     return Reading(
-        fid, r.text, r.confidence, "vlm", None if r.text else "the text reader found nothing"
+        fid,
+        r.text,
+        min(r.confidence, LINES_CONFIDENCE),
+        "vlm",
+        "handwriting on lines: check the reading",
+        detail,
     )
 
 
