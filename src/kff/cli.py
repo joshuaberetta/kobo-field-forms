@@ -3,12 +3,17 @@
 import argparse
 import json
 import logging
+import secrets
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 
 from kff.config import Settings
 from kff.errors import KffError
 from kff.fetch import fetch_form, parse_asset_uid
 from kff.kobo.client import KoboClient
+from kff.render.options import PAPERS, RenderOptions
+from kff.render.pdf import render, render_png
 from kff.store import FormVersion, Store
 
 
@@ -50,6 +55,59 @@ def cmd_show(args: argparse.Namespace) -> None:
     print(json.dumps(form.content, indent=2, ensure_ascii=False))
 
 
+def cmd_render(args: argparse.Namespace) -> None:
+    settings = Settings.from_env(need_token=False)
+    uid = parse_asset_uid(args.project)
+    options = RenderOptions(
+        paper=args.paper,
+        language=args.language,
+        font_size=args.font_size,
+        repeat_rows=args.repeat_rows,
+        show_hints=not args.no_hints,
+        show_conditions=not args.no_conditions,
+        show_names=args.show_names,
+    )
+    with Store(settings.home) as store:
+        form = store.get_form(settings.server, uid, args.version)
+        if form is None:
+            raise KffError(
+                f"{uid} isn't in the store for {settings.server}; run `kff fetch {uid}` first."
+            )
+        rendered = render(form, options, copies=args.copies)
+        batch = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+        out = Path(args.out or f"out/{uid}-{batch}.pdf")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(rendered.pdf)
+        # Only record the sheets once the PDF exists: a sheet in the store is one that
+        # may be printed and scanned.
+        store.save_layout(rendered.layout)
+        store.save_sheets(rendered.layout_hash, batch, [s.id for s in rendered.sheets])
+    if args.layout_json:
+        Path(args.layout_json).write_text(json.dumps(rendered.layout, indent=1))
+    if args.preview:
+        preview = Path(args.preview)
+        preview.mkdir(parents=True, exist_ok=True)
+        for i, png in enumerate(render_png(rendered, form), 1):
+            (preview / f"{uid}-page{i}.png").write_bytes(png)
+    pages = rendered.pages_per_sheet
+    print(
+        f"{out}  {args.copies} sheet(s) × {pages} page(s)  layout {rendered.layout_hash}  "
+        f"batch {batch}  [{rendered.model.language or 'default language'}]"
+    )
+    for warning in rendered.model.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+
+def cmd_batches(args: argparse.Namespace) -> None:
+    settings = Settings.from_env(need_token=False)
+    with Store(settings.home) as store:
+        for b in store.batches():
+            print(
+                f"{b['batch']}  {b['sheets']} sheet(s)  layout {b['layout_hash']}  "
+                f"{b['asset_uid']}  {b['version_uid']}  {b['name']}"
+            )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kff", description="Paper forms for KoboToolbox.")
     parser.add_argument("-v", "--verbose", action="store_true", help="log requests")
@@ -69,6 +127,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("project", help="project uid or link")
     p.add_argument("--version", help="version uid (default: the newest stored)")
     p.set_defaults(func=cmd_show)
+
+    p = sub.add_parser("render", help="render printable sheets (PDF) from a stored form")
+    p.add_argument("project", help="project uid or link")
+    p.add_argument("--version", help="version uid (default: the newest stored)")
+    p.add_argument("--copies", type=int, default=1, help="sheets, each with its own id")
+    p.add_argument("--paper", default="a4", choices=sorted(PAPERS))
+    p.add_argument("--language", help="translation name or code, e.g. en or 'English (en)'")
+    p.add_argument("--font-size", type=float, default=10.0, help="points (default 10)")
+    p.add_argument("--repeat-rows", type=int, default=3, help="entries for an open repeat")
+    p.add_argument("--no-hints", action="store_true")
+    p.add_argument("--no-conditions", action="store_true", help="don't print skip logic")
+    p.add_argument("--show-names", action="store_true", help="print field ids (testing)")
+    p.add_argument("--out", help="PDF path (default: out/<uid>-<batch>.pdf)")
+    p.add_argument("--layout-json", help="also write the layout map here")
+    p.add_argument("--preview", help="also write PNGs of the first sheet to this directory")
+    p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("batches", help="list rendered batches of sheets")
+    p.set_defaults(func=cmd_batches)
     return parser
 
 

@@ -1,6 +1,6 @@
 # kobo-field-forms — PoC plan
 
-Status: **in progress.** Milestone 1 done (2026-10-29, branch `milestone-1`).
+Status: **in progress.** Milestones 1 and 2 done (2026-10-29, branches `milestone-1`, `milestone-2`).
 
 Progress:
 - **Milestone 1 (skeleton + fetch): done.** `kff fetch | forms | show`, SQLite store
@@ -13,6 +13,39 @@ Progress:
     submission's root `version` attribute will need (milestone 6).
   - Changed from the plan: the store keeps the form content as JSON in SQLite rather than
     as separate files: it's small, and one file is easier to copy to an offline box.
+- **Milestone 2 (render): done.** `kff render` / `kff batches`; `form/model.py` (content →
+  printable model), `render/form.typ`, `render/pdf.py`, `render/options.py`. Every
+  printable type from the table, groups, repeats (one block per instance), skip logic in
+  words, A4/A5/A3/Letter/Legal, any one language. Tested on two real kf forms too.
+  - **Typst comes from the `typst` Python package** (typst-py 0.15.0, embedding Typst 0.15),
+    pinned in `uv.lock`, instead of the CLI: no binary to install in CI or Docker, and
+    `Compiler.query` gives the `<mark>` metadata directly.
+  - **Two passes:** one placeholder sheet first (page count, positions, layout hash), then
+    all sheets with their QR codes. The QR, markers and title are drawn in the page
+    *foreground*, so they can't move the body; the second pass checks that every sheet's
+    marks equal the first's.
+  - **Checked with OpenCV at 200 ppi** (`tests/unit/test_render.py`): all four ArUco markers
+    (DICT_4X4_50, ids 0–3 clockwise from top-left) found within 0.3 mm of the map (0.08 mm
+    measured), every QR decodes to its page, and every box's top edge is dark at its mapped
+    position with a blank inside.
+  - **QR:** level Q, ~120 bytes, 22 mm, version 7 (≈0.4 mm modules: ~3 px at 200 dpi, ~5 at
+    300). Sheet ids are uuid4 hex; the printed code is the first 8 (`4F3A-91C2`).
+  - **Golden test** is the layout map JSON (`tests/fixtures/golden/`), not page images:
+    exact, small, and readable in a diff. The OpenCV checks above cover what images would.
+  - **Widget defaults:** integer digits from the constraint's upper bound (`. <= 120` → 3),
+    else 4; decimals 2 places; range from `end`; text one row of comb boxes across the
+    page (23 on A4), `multiline` 4 lines; signature/draw images a 30 mm box, other images
+    60 mm. Choice lists: one line if ≤5 short labels, else 3 or 2 columns.
+  - **Right to left comes almost free** (found while checking `--language ar`): with
+    `text(lang: "ar")` Typst mirrors the grids itself (question numbers on the right,
+    choice columns flipped, bubbles right of their labels), and the layout map follows:
+    all 159 boxes land where mapped (`test_arabic_pages_mirror_but_marks_stay_true`).
+    Digit combs stay left to right because they're explicit `stack(dir: ltr)`.
+    Left for 2b: the template's own words ("Answer only if…", "Sheet", the instructions)
+    need translating per language; Arabic text answers should use lines, not combs (script
+    registry); the condition sentence mixes directions.
+  - **Glyph gap:** Noto Sans has no `↳`; with `fallback: false` a missing glyph shows as
+    a box rather than silently using another font. Kept that way: it shows up in review.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.
@@ -253,7 +286,7 @@ kobo-field-forms/
   src/kff/
     kobo/client.py        KPI client (token from env), versions, OpenRosa submit
     form/model.py         content → printable model (questions, choices, groups, repeats)
-    render/typst.py       model → PDF + layout map (typst compile + typst query)
+    render/pdf.py         model → PDF + layout map (typst compile + query, two passes)
     scan/register.py      QR decode, marker detection, homography
     scan/extract.py       field crops from the layout map
     recognize/            omr.py, digits.py, htr.py (Recognizer interface)
@@ -262,9 +295,9 @@ kobo-field-forms/
     store.py              local store (SQLite + files): forms, layouts, sheets, scans, results
     web/                  FastAPI review UI
     scripts.toml          script registry: fonts, direction, digit sets, text entry
+    render/form.typ       the Typst template
+    render/fonts/         bundled OFL fonts (Noto Sans, Noto Naskh Arabic, …)
     cli.py                kff fetch | render | scan | review | submit | e2e
-  templates/form.typ
-  fonts/                  bundled OFL fonts (Noto Sans, Noto Naskh Arabic, …)
   tests/
     unit/ ...
     fixtures/forms/       XLSForms covering each question type

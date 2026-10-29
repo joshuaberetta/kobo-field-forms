@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 from kff.errors import KffError
-from kff.store import SCHEMA_VERSION, FormVersion, Store
+from kff.store import _MIGRATIONS, SCHEMA_VERSION, FormVersion, Store
 
 
 def make_form(version_uid="v1", date="2026-10-01T00:00:00Z", name="Form", **kw) -> FormVersion:
@@ -55,3 +55,30 @@ def test_refuses_newer_schema(tmp_path):
     db.close()
     with pytest.raises(KffError, match="newer"):
         Store(tmp_path)
+
+
+def test_layouts_and_sheets(tmp_path):
+    layout = {
+        "layout_hash": "abcd1234",
+        "pages_per_sheet": 2,
+        "form": {"server": "kf.kobotoolbox.org", "asset_uid": "aAsset000000", "version_uid": "v1"},
+    }
+    with Store(tmp_path) as store:
+        store.save_form(make_form())
+        store.save_layout(layout)
+        store.save_layout(layout)  # same hash: kept once
+        store.save_sheets("abcd1234", "b1", ["s1", "s2"])
+        assert store.get_layout("abcd1234") == layout
+        assert store.get_sheet("s2")["copy"] == 2
+        assert store.get_sheet("nope") is None
+        [batch] = store.batches()
+    assert (batch["batch"], batch["sheets"], batch["name"]) == ("b1", 2, "Form")
+
+
+def test_upgrades_an_older_store(tmp_path):
+    db = sqlite3.connect(tmp_path / "kff.db")
+    db.executescript(_MIGRATIONS[1])
+    db.execute("PRAGMA user_version = 1")
+    db.close()
+    with Store(tmp_path) as store:
+        assert store.batches() == []

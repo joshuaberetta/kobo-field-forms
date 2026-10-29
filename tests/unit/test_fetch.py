@@ -125,3 +125,24 @@ def test_cli_reports_errors(tmp_path, monkeypatch, capsys):
     assert "KOBO_TOKEN is not set" in capsys.readouterr().err
     assert main(["show", UID]) == 1
     assert "kff fetch" in capsys.readouterr().err
+
+
+@respx.mock
+def test_cli_render(tmp_path, monkeypatch, capsys):
+    mock_kobo()
+    monkeypatch.setenv("KOBO_TOKEN", TOKEN)
+    monkeypatch.setenv("KFF_HOME", str(tmp_path))
+    assert main(["fetch", UID]) == 0
+    monkeypatch.delenv("KOBO_TOKEN")  # rendering is offline
+    pdf = tmp_path / "sheets.pdf"
+    args = ["render", UID, "--copies", "2", "--out", str(pdf), "--language", "ar"]
+    assert main([*args, "--preview", str(tmp_path / "png")]) == 0
+    out = capsys.readouterr().out
+    assert "2 sheet(s) × 1 page(s)" in out and "Arabic (ar)" in out
+    assert pdf.read_bytes().startswith(b"%PDF")
+    assert (tmp_path / "png" / f"{UID}-page1.png").exists()
+    assert main(["batches"]) == 0
+    assert "2 sheet(s)" in capsys.readouterr().out
+
+    assert main(["render", "aNotFetched0000000000"]) == 1
+    assert "kff fetch aNotFetched0000000000" in capsys.readouterr().err
