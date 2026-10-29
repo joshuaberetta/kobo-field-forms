@@ -12,7 +12,8 @@
 #
 # KOBO_TOKEN and KOBO_BASE_URL are read from your environment and piped to the remote
 # command on stdin, so they never land in a file, an image or the remote process list.
-# Overrides: NAME, SIZE (s-2vcpu-4gb; use s-8vcpu-16gb-amd with the vlm), REGION.
+# Overrides: NAME, SIZE (s-2vcpu-4gb; use s-8vcpu-16gb-amd with the vlm), REGION, and
+# SSH_PORT=443 on networks that block outgoing port 22 (sshd then listens on both).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,7 +23,8 @@ REGION=${REGION:-}
 REGION_CANDIDATES="ams3 fra1 lon1 nyc3 tor1 sfo3"
 IMAGE=ubuntu-24-04-x64
 SSH_KEY_FILE=${SSH_KEY_FILE:-$HOME/.ssh/id_ed25519.pub}
-SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+SSH_PORT=${SSH_PORT:-22}
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o ServerAliveInterval=30)
 VLM_FILES="ggml-org/gemma-4-E4B-it-GGUF:gemma-4-E4B-it-Q4_0.gguf ggml-org/gemma-4-E4B-it-GGUF:mmproj-gemma-4-E4B-it-Q8_0.gguf"
 
 droplet_id() { doctl compute droplet list --format ID,Name --no-header | awk -v n="$NAME" '$2 == n {print $1}'; }
@@ -31,14 +33,21 @@ droplet_ip() {
     [[ -n "$id" ]] || { echo "No droplet named $NAME (deploy/droplet.sh create)" >&2; exit 1; }
     doctl compute droplet get "$id" --format PublicIPv4 --no-header
 }
-remote() { ssh "${SSH_OPTS[@]}" "root@$(droplet_ip)" "$@"; }
+remote() { ssh -p "$SSH_PORT" "${SSH_OPTS[@]}" "root@$(droplet_ip)" "$@"; }
 
 cloud_init() {
-    cat <<'YAML'
+    cat <<YAML
 #cloud-config
 package_update: true
 packages: [docker.io, docker-compose-v2, rsync]
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-kff-port.conf
+    content: |
+      Port 22
+      Port $SSH_PORT
 runcmd:
+  # Ubuntu 24.04 starts sshd from ssh.socket, which ignores Port lines (kobo-in-a-box).
+  - [sh, -c, 'if [ "$SSH_PORT" != 22 ]; then systemctl disable --now ssh.socket; systemctl enable ssh.service; systemctl restart ssh.service; fi']
   - systemctl enable --now docker
   - mkdir -p /opt/kff /opt/models
 YAML
@@ -69,6 +78,7 @@ create() {
     done
     [[ -n "$id" ]] || { echo "No region accepted $SIZE" >&2; exit 1; }
     local fw_id inbound="protocol:tcp,ports:22,address:$my_ip/32"
+    [[ "$SSH_PORT" == 22 ]] || inbound+=" protocol:tcp,ports:$SSH_PORT,address:$my_ip/32"
     local outbound="protocol:tcp,ports:all,address:0.0.0.0/0,address:::/0 protocol:udp,ports:all,address:0.0.0.0/0,address:::/0 protocol:icmp,address:0.0.0.0/0,address:::/0"
     fw_id=$(doctl compute firewall list --format ID,Name --no-header | awk -v n="$NAME-fw" '$2 == n {print $1}')
     if [[ -z "$fw_id" ]]; then
@@ -80,7 +90,15 @@ create() {
     fi
     local ip; ip=$(droplet_ip)
     echo "Waiting for SSH and cloud-init on $ip..."
-    until ssh "${SSH_OPTS[@]}" "root@$ip" 'cloud-init status --wait >/dev/null 2>&1; docker info >/dev/null 2>&1'; do sleep 5; done
+    local tries=0
+    until ssh -p "$SSH_PORT" "${SSH_OPTS[@]}" "root@$ip" 'cloud-init status --wait >/dev/null 2>&1; docker info >/dev/null 2>&1'; do
+        tries=$((tries + 1))
+        if ((tries > 60)); then
+            echo "No SSH on $ip port $SSH_PORT after 5 minutes. If your network blocks port 22, destroy and retry with SSH_PORT=443." >&2
+            exit 1
+        fi
+        sleep 5
+    done
     echo "Droplet ready: $ip"
 }
 
@@ -105,15 +123,15 @@ test_e2e() {
     local status=0
     with_token "docker compose run --rm $vlm_env -e KOBO_TOKEN -e KOBO_BASE_URL kff kff e2e --report out/e2e-report.json $args" || status=$?
     mkdir -p out
-    scp "${SSH_OPTS[@]}" "root@$(droplet_ip):/opt/kff/out/e2e-report.json" out/droplet-e2e-report.json || true
-    echo "Report: out/droplet-e2e-report.json"
+    scp -P "$SSH_PORT" "${SSH_OPTS[@]}" "root@$(droplet_ip):/opt/kff/out/e2e-report.json" "out/droplet-${REPORT_NAME:-e2e}-report.json" || true
+    echo "Report: out/droplet-${REPORT_NAME:-e2e}-report.json"
     return $status
 }
 
 web() {
     with_token 'KOBO_TOKEN=$KOBO_TOKEN KOBO_BASE_URL=$KOBO_BASE_URL docker compose up -d kff'
     echo "Tunnelling http://127.0.0.1:8765/ (Ctrl-C to stop; the container keeps running)"
-    ssh "${SSH_OPTS[@]}" -N -L 8765:127.0.0.1:8765 "root@$(droplet_ip)"
+    ssh -p "$SSH_PORT" "${SSH_OPTS[@]}" -N -L 8765:127.0.0.1:8765 "root@$(droplet_ip)"
 }
 
 vlm() {
