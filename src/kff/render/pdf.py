@@ -11,20 +11,23 @@ Two passes over the same template:
 import hashlib
 import io
 import json
-import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 import cv2
+import pypdfium2 as pdfium
 import segno
 import typst
 
 from kff.errors import KffError
 from kff.form.model import ModelOptions, PrintModel, build_model
-from kff.render.options import PAPERS, Geometry, RenderOptions
+from kff.render.options import Geometry, RenderOptions
+from kff.render.strings import strings_for
+from kff.scripts import DEFAULT as DEFAULT_SCRIPT
+from kff.scripts import scripts
 from kff.store import FormVersion
 
 HERE = Path(__file__).parent
@@ -58,6 +61,8 @@ class Rendered:
     layout: dict[str, Any]
     sheets: list[Sheet]
     model: PrintModel
+    # What the template was given (minus the sheets), for previews.
+    data: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
     def layout_hash(self) -> str:
@@ -109,14 +114,28 @@ def _round(item: dict[str, Any]) -> dict[str, Any]:
     return {k: round(v, 2) if isinstance(v, float) else v for k, v in item.items()}
 
 
-def _lang_code(language: str) -> str | None:
-    """`Arabic (ar)` → `ar`, for Typst's `text(lang:)` (shaping, direction, hyphenation)."""
-    m = re.search(r"\(([a-z]{2,3})(?:[-_][A-Za-z0-9]+)?\)\s*$", language or "")
-    return m.group(1).lower() if m else None
-
-
 def _version_label(form: FormVersion) -> str:
     return f"v{form.version_number or '?'} ({(form.date_deployed or '')[:10]})"
+
+
+def _fonts(model: PrintModel) -> list[str]:
+    """Latin first (digits, codes, footer), then each sheet language's script."""
+    fonts = list(scripts()[DEFAULT_SCRIPT].fonts)
+    for lang in model.languages:
+        fonts += [f for f in scripts()[lang.script].fonts if f not in fonts]
+    return fonts
+
+
+def _instructions(model: PrintModel) -> list[dict[str, Any]]:
+    out = []
+    for lang in model.languages:
+        strings, _ = strings_for(lang.code)
+        text = strings["instructions"]
+        if not any(o["text"] == text for o in out):
+            out.append(
+                {"text": text, "required": strings["required"], "lang": lang.code, "dir": lang.dir}
+            )
+    return out
 
 
 def render(
@@ -126,27 +145,34 @@ def render(
     copies: int = 1,
     sheet_ids: list[str] | None = None,
 ) -> Rendered:
-    """`copies` sheets of `form`. `sheet_ids` fixes the ids (tests); default: random."""
+    """`copies` sheets of `form` in one layout. `sheet_ids` fixes the ids (tests); default:
+    random. For `per-sheet` languages use `render_set`."""
     options = options or RenderOptions()
     if not 1 <= copies <= 500:
         raise KffError("copies must be between 1 and 500.")
     geometry = Geometry()
+    geometry.check(options)
     try:
         model = build_model(
             form.content,
             form.name,
             ModelOptions(
-                language=options.language,
+                languages=options.languages,
                 repeat_rows=options.repeat_rows,
-                text_cells=geometry.text_cells(options.paper),
+                text_cells=geometry.text_cells(options),
+                text_entry=options.text_entry,
+                choice_layout=options.choice_layout,
             ),
         )
     except ValueError as err:
         raise KffError(str(err)) from None
 
+    page_lang = model.languages[0]
+    width, height = options.size
     base: dict[str, Any] = {
         "options": options.to_json(),
         "geometry": geometry.to_json(),
+        "paper": {"w": width, "h": height},
         "model": model.to_json(),
         "form": {
             "server": form.server,
@@ -155,7 +181,11 @@ def render(
             "version_label": _version_label(form),
         },
         "markers": marker_bits(),
-        "lang": _lang_code(model.language),
+        "lang": page_lang.code,
+        "dir": page_lang.dir,
+        "fonts": _fonts(model),
+        "strings": strings_for(page_lang.code)[0],
+        "instructions": _instructions(model),
     }
     template_hash = hashlib.sha256(TEMPLATE.read_bytes()).hexdigest()
     layout_hash = hashlib.sha256(
@@ -164,28 +194,29 @@ def render(
     base["layout_hash"] = layout_hash
 
     # Pass 1: one placeholder sheet.
-    first = _compiler({**base, "pages_per_sheet": 0, "sheets": [{"code": "----", "qr": []}]})
+    first = _compiler(
+        {**base, "pages_per_sheet": 0, "pad_blank": False, "sheets": [{"code": "----", "qr": []}]}
+    )
     try:
         marks = [_round(m) for m in _query(first, "<mark>")]
         page_marks = [_round(m) for m in _query(first, "<page-mark>")]
     except typst.TypstError as err:
         raise KffError(f"Typst failed to lay out the form: {err.message}") from None
-    pages = sum(1 for m in page_marks if m["k"] == "page")
+    content_pages = sum(1 for m in page_marks if m["k"] == "page")
+    _check_fit(marks, model, geometry, height)
+    # Double-sided: pad each sheet to an even page count, so no leaf holds two sheets.
+    pad_blank = options.sides == "double" and content_pages % 2 == 1
+    pages = content_pages + pad_blank
+    base["pages_per_sheet"] = pages
+    base["pad_blank"] = pad_blank
 
     ids = sheet_ids or [uuid.uuid4().hex for _ in range(copies)]
     if len(ids) != copies:
         raise KffError("sheet_ids must have one id per copy.")
     sheets = [Sheet(sid, i + 1) for i, sid in enumerate(ids)]
-    sheet_data = [
-        {
-            "code": s.code,
-            "qr": [_qr_svg(qr_payload(layout_hash, s.id, p, pages)) for p in range(1, pages + 1)],
-        }
-        for s in sheets
-    ]
 
     # Pass 2: every sheet.
-    final = _compiler({**base, "pages_per_sheet": pages, "sheets": sheet_data})
+    final = _compiler({**base, "sheets": [_sheet_data(s, layout_hash, pages) for s in sheets]})
     try:
         pdf = final.compile(format="pdf")
         all_marks = _query(final, "<mark>")
@@ -193,17 +224,23 @@ def render(
         raise KffError(f"Typst failed to render the form: {err.message}") from None
     _check_sheets(marks, all_marks, pages, copies)
 
-    width, height = PAPERS[options.paper]
     page_one = [m for m in page_marks if m["page"] == 1]
     layout = {
         "format": LAYOUT_FORMAT,
         "layout_hash": layout_hash,
         "form": base["form"],
         "language": model.language,
+        "languages": [lang.name for lang in model.languages],
         "options": options.to_json(),
         "geometry": geometry.to_json(),
-        "paper": {"name": options.paper, "w": width, "h": height},
+        "paper": {
+            "name": options.paper,
+            "orientation": options.orientation,
+            "w": width,
+            "h": height,
+        },
         "pages_per_sheet": pages,
+        "blank_pages": [pages] if pad_blank else [],
         # The same on every page.
         "markers": [
             {k: m[k] for k in ("id", "x", "y", "w", "h")} for m in page_one if m["k"] == "marker"
@@ -213,34 +250,70 @@ def render(
         "fields": _fields(model),
     }
     assert isinstance(pdf, bytes)
-    return Rendered(pdf=pdf, layout=layout, sheets=sheets, model=model)
+    return Rendered(pdf=pdf, layout=layout, sheets=sheets, model=model, data=base)
 
 
-def render_png(rendered: Rendered, form: FormVersion, ppi: float = 100) -> list[bytes]:
-    """PNG pages of the first sheet (a preview; the PDF is what gets printed)."""
-    sheet = rendered.sheets[0]
-    pages = rendered.pages_per_sheet
-    data = {
-        "options": rendered.layout["options"],
-        "geometry": rendered.layout["geometry"],
-        "model": rendered.model.to_json(),
-        "form": rendered.layout["form"],
-        "markers": marker_bits(),
-        "lang": _lang_code(rendered.model.language),
-        "layout_hash": rendered.layout_hash,
-        "pages_per_sheet": pages,
-        "sheets": [
-            {
-                "code": sheet.code,
-                "qr": [
-                    _qr_svg(qr_payload(rendered.layout_hash, sheet.id, p, pages))
-                    for p in range(1, pages + 1)
-                ],
-            }
-        ],
+def render_set(
+    form: FormVersion, options: RenderOptions | None = None, *, copies: int = 1
+) -> list[Rendered]:
+    """One `Rendered` per layout: several with `per-sheet` languages (each language its own
+    sheets and layout), else one."""
+    options = options or RenderOptions()
+    if options.language_layout != "per-sheet" or len(options.languages) < 2:
+        return [render(form, options, copies=copies)]
+    return [
+        render(
+            form,
+            replace(options, languages=(lang,), language_layout="stacked"),
+            copies=copies,
+        )
+        for lang in options.languages
+    ]
+
+
+def merge_pdfs(pdfs: list[bytes]) -> bytes:
+    if len(pdfs) == 1:
+        return pdfs[0]
+    out = pdfium.PdfDocument.new()
+    try:
+        for data in pdfs:
+            doc = pdfium.PdfDocument(data)
+            out.import_pages(doc)
+            doc.close()
+        buf = io.BytesIO()
+        out.save(buf)
+        return buf.getvalue()
+    finally:
+        out.close()
+
+
+def _sheet_data(sheet: Sheet, layout_hash: str, pages: int) -> dict[str, Any]:
+    return {
+        "code": sheet.code,
+        "qr": [_qr_svg(qr_payload(layout_hash, sheet.id, p, pages)) for p in range(1, pages + 1)],
     }
-    out = _compiler(data).compile(format="png", ppi=ppi)
+
+
+def render_png(rendered: Rendered, ppi: float = 100) -> list[bytes]:
+    """PNG pages of the first sheet (a preview; the PDF is what gets printed)."""
+    sheet = _sheet_data(rendered.sheets[0], rendered.layout_hash, rendered.pages_per_sheet)
+    out = _compiler({**rendered.data, "sheets": [sheet]}).compile(format="png", ppi=ppi)
     return out if isinstance(out, list) else [out]
+
+
+def _check_fit(
+    marks: list[dict[str, Any]], model: PrintModel, geometry: Geometry, height: float
+) -> None:
+    """A question taller than a page overflows the body; refuse it instead of printing
+    boxes over the footer."""
+    bottom = height - geometry.margin_bottom + 0.5
+    numbers = {q.id: q.number for q in model.questions()}
+    for m in marks:
+        if m["y"] + m["h"] > bottom:
+            raise KffError(
+                f"Question {numbers.get(m['f'], m['f'])} doesn't fit on one page; use a "
+                "bigger paper size, landscape, or the choice layout 'columns'."
+            )
 
 
 def _check_sheets(

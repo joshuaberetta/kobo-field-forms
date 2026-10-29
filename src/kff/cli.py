@@ -14,8 +14,14 @@ from kff.config import Settings
 from kff.errors import KffError
 from kff.fetch import fetch_form, parse_asset_uid
 from kff.kobo.client import KoboClient
-from kff.render.options import PAPERS, RenderOptions
-from kff.render.pdf import render, render_png
+from kff.render.options import (
+    CHOICE_LAYOUTS,
+    LANGUAGE_LAYOUTS,
+    PAPERS,
+    TEXT_ENTRIES,
+    RenderOptions,
+)
+from kff.render.pdf import merge_pdfs, render_png, render_set
 from kff.scan.extract import crops, overlay
 from kff.scan.pipeline import scan_file, sheet_status
 from kff.store import FormVersion, Store
@@ -59,47 +65,72 @@ def cmd_show(args: argparse.Namespace) -> None:
     print(json.dumps(form.content, indent=2, ensure_ascii=False))
 
 
-def cmd_render(args: argparse.Namespace) -> None:
-    settings = Settings.from_env(need_token=False)
-    uid = parse_asset_uid(args.project)
-    options = RenderOptions(
+def options_from_args(args: argparse.Namespace) -> RenderOptions:
+    languages = tuple(
+        lang.strip() for value in args.language or [] for lang in value.split(",") if lang.strip()
+    )
+    return RenderOptions(
         paper=args.paper,
-        language=args.language,
+        orientation=args.orientation,
+        sides=args.sides,
+        languages=languages,
+        language_layout=args.language_layout,
+        columns=args.columns,
         font_size=args.font_size,
+        choice_layout=args.choice_layout,
+        text_entry=args.text_entry,
         repeat_rows=args.repeat_rows,
         show_hints=not args.no_hints,
         show_conditions=not args.no_conditions,
+        show_instructions=not args.no_instructions,
         show_names=args.show_names,
     )
+
+
+def cmd_render(args: argparse.Namespace) -> None:
+    settings = Settings.from_env(need_token=False)
+    uid = parse_asset_uid(args.project)
+    options = options_from_args(args)
     with Store(settings.home) as store:
         form = store.get_form(settings.server, uid, args.version)
         if form is None:
             raise KffError(
                 f"{uid} isn't in the store for {settings.server}; run `kff fetch {uid}` first."
             )
-        rendered = render(form, options, copies=args.copies)
-        batch = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+        rendered = render_set(form, options, copies=args.copies)
+        batch = new_batch_id()
         out = Path(args.out or f"out/{uid}-{batch}.pdf")
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(rendered.pdf)
+        out.write_bytes(merge_pdfs([r.pdf for r in rendered]))
         # Only record the sheets once the PDF exists: a sheet in the store is one that
         # may be printed and scanned.
-        store.save_layout(rendered.layout)
-        store.save_sheets(rendered.layout_hash, batch, [s.id for s in rendered.sheets])
+        for r in rendered:
+            store.save_layout(r.layout)
+            store.save_sheets(r.layout_hash, batch, [s.id for s in r.sheets])
     if args.layout_json:
-        Path(args.layout_json).write_text(json.dumps(rendered.layout, indent=1))
+        layouts = [r.layout for r in rendered]
+        Path(args.layout_json).write_text(
+            json.dumps(layouts[0] if len(layouts) == 1 else layouts, indent=1)
+        )
     if args.preview:
         preview = Path(args.preview)
         preview.mkdir(parents=True, exist_ok=True)
-        for i, png in enumerate(render_png(rendered, form), 1):
-            (preview / f"{uid}-page{i}.png").write_bytes(png)
-    pages = rendered.pages_per_sheet
-    print(
-        f"{out}  {args.copies} sheet(s) × {pages} page(s)  layout {rendered.layout_hash}  "
-        f"batch {batch}  [{rendered.model.language or 'default language'}]"
-    )
-    for warning in rendered.model.warnings:
+        for r in rendered:
+            suffix = f"-{r.layout_hash}" if len(rendered) > 1 else ""
+            for i, png in enumerate(render_png(r), 1):
+                (preview / f"{uid}{suffix}-page{i}.png").write_bytes(png)
+    for r in rendered:
+        langs = " + ".join(lang.name or "default language" for lang in r.model.languages)
+        print(
+            f"{out}  {args.copies} sheet(s) × {r.pages_per_sheet} page(s)  "
+            f"layout {r.layout_hash}  batch {batch}  [{langs}]"
+        )
+    for warning in dict.fromkeys(w for r in rendered for w in r.model.warnings):
         print(f"warning: {warning}", file=sys.stderr)
+
+
+def new_batch_id() -> str:
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
 
 
 def cmd_batches(args: argparse.Namespace) -> None:
@@ -174,11 +205,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", help="version uid (default: the newest stored)")
     p.add_argument("--copies", type=int, default=1, help="sheets, each with its own id")
     p.add_argument("--paper", default="a4", choices=sorted(PAPERS))
-    p.add_argument("--language", help="translation name or code, e.g. en or 'English (en)'")
+    p.add_argument("--orientation", default="portrait", choices=["portrait", "landscape"])
+    p.add_argument("--sides", default="single", choices=["single", "double"])
+    p.add_argument(
+        "--language",
+        action="append",
+        help="translation name or code (en, 'Arabic (ar)'); repeat or comma-separate for "
+        "several, page language first",
+    )
+    p.add_argument("--language-layout", default="stacked", choices=LANGUAGE_LAYOUTS)
+    p.add_argument("--columns", type=int, default=1, choices=[1, 2], help="question columns")
     p.add_argument("--font-size", type=float, default=10.0, help="points (default 10)")
+    p.add_argument("--choice-layout", default="auto", choices=CHOICE_LAYOUTS)
+    p.add_argument("--text-entry", default="auto", choices=TEXT_ENTRIES)
     p.add_argument("--repeat-rows", type=int, default=3, help="entries for an open repeat")
     p.add_argument("--no-hints", action="store_true")
     p.add_argument("--no-conditions", action="store_true", help="don't print skip logic")
+    p.add_argument("--no-instructions", action="store_true")
     p.add_argument("--show-names", action="store_true", help="print field ids (testing)")
     p.add_argument("--out", help="PDF path (default: out/<uid>-<batch>.pdf)")
     p.add_argument("--layout-json", help="also write the layout map here")

@@ -64,9 +64,9 @@ def mark_of(layout, field, **match):
 
 
 @pytest.fixture(scope="module")
-def filled_page(rendered, form):
+def filled_page(rendered):
     """Page 1 with the consent "yes" bubble filled and a stroke in the first age box."""
-    img = cv2.imdecode(np.frombuffer(render_png(rendered, form, PPI)[0], np.uint8), 0)
+    img = cv2.imdecode(np.frombuffer(render_png(rendered, PPI)[0], np.uint8), 0)
     yes = mark_of(rendered.layout, "consent", v="yes")
     centre = (round((yes["x"] + yes["w"] / 2) * PX), round((yes["y"] + yes["h"] / 2) * PX))
     cv2.circle(img, centre, round(1.7 * PX), 0, -1)

@@ -45,10 +45,10 @@ def rendered(form):
 
 
 @pytest.fixture(scope="module")
-def pages(rendered, form):
+def pages(rendered):
     return [
         cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
-        for png in render_png(rendered, form, PPI)
+        for png in render_png(rendered, PPI)
     ]
 
 
@@ -67,7 +67,7 @@ def test_pdf_has_every_sheet(rendered):
 def test_layout_hash_is_stable_and_tracks_options(form, rendered):
     assert render(form, sheet_ids=SHEET_IDS[:1]).layout_hash == rendered.layout_hash
     assert render(form, RenderOptions(paper="us-letter")).layout_hash != rendered.layout_hash
-    assert render(form, RenderOptions(language="ar")).layout_hash != rendered.layout_hash
+    assert render(form, RenderOptions(languages=("ar",))).layout_hash != rendered.layout_hash
 
 
 def test_every_field_has_its_marks(rendered):
@@ -139,7 +139,7 @@ def test_render_rejects_bad_input(form):
     with pytest.raises(KffError, match="copies"):
         render(form, copies=0)
     with pytest.raises(KffError, match="no language 'fr'"):
-        render(form, RenderOptions(language="fr"))
+        render(form, RenderOptions(languages=("fr",)))
     with pytest.raises(KffError, match="Unknown paper"):
         RenderOptions(paper="b5")
 
@@ -147,10 +147,10 @@ def test_render_rejects_bad_input(form):
 def test_arabic_pages_mirror_but_marks_stay_true(form):
     """With `lang: ar` Typst lays the page out right to left; the map must follow it,
     and digit boxes must still run left to right."""
-    rendered = render(form, RenderOptions(language="ar"))
+    rendered = render(form, RenderOptions(languages=("ar",)))
     pages = [
         cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
-        for png in render_png(rendered, form, PPI)
+        for png in render_png(rendered, PPI)
     ]
     for m in rendered.layout["marks"]:
         if m["k"] not in ("cell", "choice"):

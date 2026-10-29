@@ -1,6 +1,6 @@
 # kobo-field-forms — PoC plan
 
-Status: **in progress.** Milestones 1, 2 and 3 done (2026-10-29, branches `milestone-1` … `milestone-3`).
+Status: **in progress.** Milestones 1, 2, 3 and 2b done (2026-10-29, branches `milestone-1` … `milestone-2b`).
 
 Progress:
 - **Milestone 1 (skeleton + fetch): done.** `kff fetch | forms | show`, SQLite store
@@ -71,6 +71,33 @@ Progress:
     (Kobo answers the second with 202 duplicate). `kff scan` notes any sheet the store
     didn't print. Tell people not to photocopy sheets; print more instead.
   - A rescan of the same sheet page replaces the earlier scan (kept, not current).
+- **Milestone 2b (print options): done**, after 3 so every option is tested through a
+  scan. Options in `render/options.py` (all of the plan's table except `header` logo and
+  `prefill`); `scripts.toml` + `scripts.py` (Latin, Arabic); `render/strings.py` (the
+  sheet's own words in en, fr, es, pt, ar, ⚠ non-English unreviewed).
+  - **Every profile is checked end to end** (`tests/unit/test_profiles.py`): render,
+    degrade (2°, perspective, blur, JPEG), register, read a filled bubble. A4 en; Letter
+    double-sided en+ar stacked; A4 landscape en+ar side by side in 2 question columns;
+    A5 Arabic large print; Legal ar+en.
+  - **Texts are lists of (text, lang, dir)**, one per sheet language, a repeat of the
+    previous language dropped. Each is set in its own block or box with its own `lang`.
+    In `stacked`, secondary languages sit under the first, aligned to the page's start
+    (an Arabic line under an English label stays next to it, set right to left). Choice
+    labels are inline: `Yes / نعم`.
+  - **The page language (first) decides** the page direction, the sheet's own words,
+    the footer and the default text entry (Arabic → lines). Skip-logic sentences are
+    built in Python per language (`answer_if`, `section_if`, op phrases, question prefix
+    `Q`/`P`/`س`, quotes).
+  - **Double-sided** pads an odd sheet with an "intentionally blank" page (markers and QR
+    too, no marks) and adds a 5 mm binding margin on the inside (`inside`/`outside`
+    margins). Sheets always start on an odd page, so every sheet lays out alike.
+  - **Landscape** is passed as explicit page width/height; `layout.paper` holds the
+    oriented size, which registration uses.
+  - **`per-sheet`** renders one layout per language (`render_set`) and merges the PDFs
+    with pypdfium2.
+  - **Refused up front** (`Geometry.check`): question columns under 80 mm, text rows under
+    8 boxes, languages side by side under 45 mm each. **Refused after layout:** a
+    question taller than a page (marks below the body), naming the question.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.

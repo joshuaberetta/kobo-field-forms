@@ -87,10 +87,10 @@ def test_choice_layouts(model):
 
 def test_conditions_in_words(model):
     qs = by_id(model)
-    assert qs["hh/district_other"].condition == "Q4 is “Other”"
-    assert qs["hh/phones"].condition == "Q7 includes “Mobile phone”"
+    assert qs["hh/district_other"].condition[0].text == "Answer only if Q4 is “Other”."
+    assert qs["hh/phones"].condition[0].text == "Answer only if Q7 includes “Mobile phone”."
     hh = next(i for i in model.items if isinstance(i, Section) and i.id == "hh")
-    assert hh.condition == "Q3 is “Yes”"
+    assert hh.condition[0].text == "Answer this section only if Q3 is “Yes”."
 
 
 @pytest.mark.parametrize(
@@ -108,15 +108,17 @@ def test_conditions_in_words(model):
 def test_describe_condition(expr, words):
     refs = _Refs()
     refs.numbers = {"a": 1, "b": 2}
-    refs.choice_labels = {"b": {"x": "X"}}
+    refs.choice_labels = {"b": {"x": ["X"]}}
     assert describe_condition(expr, refs) == words
 
 
 def test_labels_in_the_chosen_language():
-    m = build_model(CONTENT, "x", ModelOptions(language="ar"))
+    m = build_model(CONTENT, "x", ModelOptions(languages=("ar",)))
     assert m.language == "Arabic (ar)"
-    assert by_id(m)["age"].label == "العمر بالسنوات"
-    assert by_id(m)["consent"].widget.choices[0].label == "نعم"
+    assert [t.text for t in by_id(m)["age"].label] == ["العمر بالسنوات"]
+    assert by_id(m)["age"].label[0].dir == "rtl"
+    assert by_id(m)["consent"].widget.choices[0].label[0].text == "نعم"
+    assert by_id(m)["full_name"].widget.kind == "lines"  # Arabic: lines, not combs
 
 
 @pytest.mark.parametrize(("wanted", "index"), [(None, 0), ("ar", 1), ("Arabic", 1), ("en", 0)])
@@ -139,3 +141,49 @@ def test_unsupported_types_warn(model):
 )
 def test_max_digits(constraint, digits):
     assert _max_digits(constraint, 4) == digits
+
+
+def test_two_languages_stacked():
+    m = build_model(CONTENT, "x", ModelOptions(languages=("en", "ar")))
+    assert [lang.code for lang in m.languages] == ["en", "ar"]
+    age = by_id(m)["age"]
+    assert [(t.text, t.lang, t.dir) for t in age.label] == [
+        ("Age in years", "en", "ltr"),
+        ("العمر بالسنوات", "ar", "rtl"),
+    ]
+    yes = by_id(m)["consent"].widget.choices[0]
+    assert [t.text for t in yes.label] == ["Yes", "نعم"]
+    other = by_id(m)["hh/district_other"].condition
+    assert [t.text for t in other] == [
+        "Answer only if Q4 is “Other”.",
+        "أجب فقط إذا كان س4 هو «أخرى».",
+    ]
+    # The page language (first) decides text entry: English → letter boxes.
+    assert by_id(m)["full_name"].widget.kind == "comb"
+
+
+def test_same_text_in_two_languages_printed_once():
+    content = {**CONTENT, "survey": [{"type": "text", "name": "t", "label": ["Name", "Name"]}]}
+    m = build_model(content, "x", ModelOptions(languages=("en", "ar")))
+    assert [t.text for t in by_id(m)["t"].label] == ["Name"]
+
+
+def test_language_without_sheet_wording_warns():
+    content = {**CONTENT, "translations": ["English (en)", "Kiswahili (sw)"]}
+    m = build_model(content, "x", ModelOptions(languages=("sw",)))
+    assert any("no sheet wording" in w for w in m.warnings)
+    assert m.languages[0].script == "latin"
+
+
+def test_unknown_script_warns():
+    content = {**CONTENT, "translations": ["English (en)", "Amharic (am)"]}
+    m = build_model(content, "x", ModelOptions(languages=("am",)))
+    assert any("script unknown" in w for w in m.warnings)
+
+
+def test_forced_text_entry_and_choice_layout():
+    m = build_model(
+        CONTENT, "x", ModelOptions(languages=("ar",), text_entry="comb", choice_layout="vertical")
+    )
+    assert by_id(m)["full_name"].widget.kind == "comb"
+    assert by_id(m)["consent"].widget.layout == "vertical"
