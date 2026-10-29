@@ -16,7 +16,7 @@ from typing import Any
 
 from kff.errors import KffError
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _MIGRATIONS = {
     1: """
@@ -68,6 +68,29 @@ _MIGRATIONS = {
         current     INTEGER NOT NULL DEFAULT 1  -- 0 once a rescan of the page replaces it
     );
     CREATE INDEX scans_sheet ON scans (sheet_id, page);
+    """,
+    4: """
+    CREATE TABLE readings (
+        sheet_id    TEXT NOT NULL,
+        field_id    TEXT NOT NULL,         -- xpath, repeat instances in brackets
+        value       TEXT,                  -- Kobo submission format; NULL: blank
+        confidence  REAL NOT NULL,
+        method      TEXT NOT NULL,         -- omr | digits | vlm | ink | none | person
+        reason      TEXT,                  -- why a person should check it
+        needs_review INTEGER NOT NULL,
+        detail      TEXT NOT NULL,         -- JSON: fills, digits as written, …
+        reviewed    INTEGER NOT NULL DEFAULT 0,  -- 1: a person confirmed or corrected it
+        updated_at  TEXT NOT NULL,
+        PRIMARY KEY (sheet_id, field_id)
+    );
+    CREATE TABLE submissions (
+        sheet_id    TEXT NOT NULL,
+        instance_id TEXT NOT NULL,         -- uuid:<sheet id>
+        status      INTEGER NOT NULL,      -- HTTP status: 201 created, 202 duplicate
+        message     TEXT,
+        submitted_at TEXT NOT NULL
+    );
+    CREATE INDEX submissions_sheet ON submissions (sheet_id);
     """,
 }
 
@@ -269,6 +292,87 @@ class Store:
     def get_scan(self, scan_id: str) -> dict[str, Any] | None:
         row = self._db.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
         return dict(row) if row else None
+
+    # -- readings and submissions --------------------------------------------
+
+    def save_readings(self, sheet_id: str, readings: list[dict[str, Any]]) -> None:
+        """Store machine readings; a reading a person reviewed is kept as it is."""
+        now = _now()
+        with self._db:
+            for r in readings:
+                self._db.execute(
+                    """
+                    INSERT INTO readings (sheet_id, field_id, value, confidence, method, reason,
+                        needs_review, detail, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (sheet_id, field_id) DO UPDATE SET
+                        value = excluded.value, confidence = excluded.confidence,
+                        method = excluded.method, reason = excluded.reason,
+                        needs_review = excluded.needs_review, detail = excluded.detail,
+                        updated_at = excluded.updated_at
+                    WHERE readings.reviewed = 0
+                    """,
+                    (
+                        sheet_id,
+                        r["field_id"],
+                        r["value"],
+                        r["confidence"],
+                        r["method"],
+                        r["reason"],
+                        int(r["needs_review"]),
+                        json.dumps(r.get("detail") or {}, ensure_ascii=False),
+                        now,
+                    ),
+                )
+
+    def readings(self, sheet_id: str) -> dict[str, dict[str, Any]]:
+        rows = self._db.execute("SELECT * FROM readings WHERE sheet_id = ?", (sheet_id,))
+        return {r["field_id"]: {**dict(r), "detail": json.loads(r["detail"])} for r in rows}
+
+    def review(self, sheet_id: str, field_id: str, value: str | None) -> None:
+        """A person's answer for a field: confirmed or corrected."""
+        with self._db:
+            self._db.execute(
+                """
+                INSERT INTO readings (sheet_id, field_id, value, confidence, method, reason,
+                    needs_review, detail, reviewed, updated_at)
+                VALUES (?, ?, ?, 1.0, 'person', NULL, 0, '{}', 1, ?)
+                ON CONFLICT (sheet_id, field_id) DO UPDATE SET
+                    value = excluded.value, confidence = 1.0, method = 'person', reason = NULL,
+                    needs_review = 0, reviewed = 1, updated_at = excluded.updated_at
+                """,
+                (sheet_id, field_id, value, _now()),
+            )
+
+    def record_submission(self, sheet_id: str, instance_id: str, status: int, message: str):
+        with self._db:
+            self._db.execute(
+                "INSERT INTO submissions VALUES (?, ?, ?, ?, ?)",
+                (sheet_id, instance_id, status, message, _now()),
+            )
+
+    def submission(self, sheet_id: str) -> dict[str, Any] | None:
+        """The latest successful (201/202) submission of a sheet."""
+        row = self._db.execute(
+            """SELECT * FROM submissions WHERE sheet_id = ? AND status IN (201, 202)
+            ORDER BY submitted_at DESC LIMIT 1""",
+            (sheet_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def scanned_sheets(self) -> list[dict[str, Any]]:
+        """Every sheet with a current scan: its layout, form and pages found."""
+        rows = self._db.execute(
+            """
+            SELECT s.sheet_id, s.layout_hash, l.asset_uid, l.version_uid, l.pages_per_sheet,
+                   f.name, COUNT(*) AS pages_found, MAX(s.created_at) AS scanned_at
+            FROM scans s JOIN layouts l USING (layout_hash)
+            JOIN forms f USING (server, asset_uid, version_uid)
+            WHERE s.current = 1
+            GROUP BY s.sheet_id ORDER BY scanned_at DESC
+            """
+        )
+        return [dict(r) for r in rows]
 
 
 def new_batch_id() -> str:

@@ -170,11 +170,19 @@ class KoboClient:
         raise UnavailableError("KoboToolbox redirected too many times.")
 
     def request(
-        self, method: str, path: str, *, params: Mapping[str, Any] | None = None, **kw: Any
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        idempotent: bool = False,
+        **kw: Any,
     ) -> httpx.Response:
         """Send a request with retries; return the 2xx response or raise KoboError.
 
-        Extra keywords (`json`, `files`, `data`, `headers`) go to httpx.
+        5xx responses are retried for idempotent methods, or when the caller says the
+        request is (`idempotent=True`). Extra keywords (`json`, `files`, `data`,
+        `headers`) go to httpx.
         """
         method = method.upper()
         url = self.url(path, params)
@@ -194,7 +202,7 @@ class KoboClient:
                 raise UnavailableError(f"Network error talking to {self.base_url}.") from exc
 
             retryable = resp.status_code == 429 or (
-                resp.status_code in RETRY_STATUSES and method in IDEMPOTENT_METHODS
+                resp.status_code in RETRY_STATUSES and (method in IDEMPOTENT_METHODS or idempotent)
             )
             if retryable and not last:
                 delay = _retry_after_seconds(resp)
@@ -217,6 +225,24 @@ class KoboClient:
             return resp.json()
         except ValueError:
             raise KoboError("KoboToolbox returned a non-JSON response.") from None
+
+    def post(self, path: str, json_body: Any = None) -> Any:
+        resp = self.request("POST", path, json=json_body)
+        return resp.json() if resp.content else None
+
+    def patch(self, path: str, json_body: Any = None) -> Any:
+        resp = self.request("PATCH", path, json=json_body)
+        return resp.json() if resp.content else None
+
+    def submit(self, xml: bytes, attachments: dict[str, tuple[bytes, str]]) -> httpx.Response:
+        """POST an OpenRosa submission to `{server}/submission` (KB §5.6): 201 created, 202
+        a duplicate instanceID. Each attachment is a part named like its file."""
+        files = [("xml_submission_file", ("submission.xml", xml, "text/xml"))] + [
+            (name, (name, data, mime)) for name, (data, mime) in attachments.items()
+        ]
+        # An absolute URL: OpenRosa's path takes no trailing slash or `format=json`. Safe to
+        # retry: the instanceID makes a repeat a 202 duplicate, never a second record.
+        return self.request("POST", f"{self.base_url}/submission", files=files, idempotent=True)
 
     def paginate(
         self, path: str, *, params: Mapping[str, Any] | None = None, page_size: int = 100
