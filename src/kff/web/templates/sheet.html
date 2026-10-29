@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Sheet {{ code }} · kobo-field-forms{% endblock %}
+{% block main %}
+<section class="card">
+  <h2>Sheet <span class="mono">{{ code }}</span> · {{ form.name }}</h2>
+  <p class="muted">Pages scanned: {{ pages_found | join(", ") }} of {{ layout.pages_per_sheet }} · layout <span class="mono">{{ layout.layout_hash }}</span>
+  {% if submission %} · <strong>{{ "submitted to Kobo" if submission.status == 201 else "already in Kobo" }}</strong> ({{ submission.submitted_at }}){% endif %}</p>
+  {% if message %}<p class="note">{{ message }}</p>{% endif %}
+  <div class="row">
+    <form method="post" action="/sheets/{{ sheet_id }}/read"><button>{{ "Read again" if read else "Read answers" }}</button></form>
+    {% if read %}
+    <form method="post" action="/sheets/{{ sheet_id }}/submit">
+      <button {% if problems or not has_token %}disabled title="{{ 'Fix the answers marked below first' if problems else 'Set KOBO_TOKEN before kff web' }}"{% endif %}>Submit to Kobo</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if read %}<p class="{{ 'error' if problems else 'muted' }}">{{ problems }} answer(s) to check before submitting.{% if not has_token %} Submitting needs <code>KOBO_TOKEN</code>.{% endif %}</p>{% endif %}
+</section>
+
+{% if read %}
+<form method="post" action="/sheets/{{ sheet_id }}/review" class="card">
+  <table class="review">
+    <tr><th>Question</th><th>As scanned</th><th>Answer</th><th>Read</th></tr>
+    {% for row in rows %}
+    {% set r = row.reading %}
+    <tr class="{{ 'problem' if row.problem else '' }} {{ 'hidden-q' if row.hidden else '' }}">
+      <td><strong>{{ row.info.number }}.</strong> {{ row.info.label }}
+        <div class="muted mono small">{{ row.id }}</div>
+        {% if row.problem %}<div class="error small">{{ row.problem }}</div>{% endif %}
+        {% if row.hidden %}<div class="muted small">hidden by skip logic: not submitted</div>{% endif %}
+      </td>
+      <td><img class="crop" src="/sheets/{{ sheet_id }}/crop.png?f={{ row.id | urlencode }}" alt="scan of {{ row.id }}" loading="lazy"></td>
+      <td>
+        {% if row.info.widget == "box" %}
+          <span class="muted">{{ "drawing attached" if r and r.value else "empty" }}</span>
+          <input type="hidden" name="value:{{ row.id }}" value="{{ r.value if r and r.value else '' }}">
+        {% else %}
+          <input name="value:{{ row.id }}" value="{{ r.value if r and r.value is not none else '' }}" {% if row.choices %}list="choices-{{ loop.index }}"{% endif %} dir="auto">
+          {% if row.choices %}<datalist id="choices-{{ loop.index }}">{% for c in row.choices %}<option value="{{ c }}">{% endfor %}</datalist>
+          <div class="muted small">{{ "values, space-separated: " if row.info.multiple else "one of: " }}{{ row.choices | join(", ") }}</div>{% endif %}
+        {% endif %}
+        <label class="check small"><input type="checkbox" name="ok:{{ row.id }}" {% if r and r.reviewed %}checked{% endif %}> checked</label>
+      </td>
+      <td class="small">{% if r %}{{ r.method }} · {{ "%.0f" | format(r.confidence * 100) }}%{% if r.reason and not r.reviewed %}<div class="note">{{ r.reason }}</div>{% endif %}{% if r.detail.written %}<div class="muted mono">{{ r.detail.written }}</div>{% endif %}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p><button>Save answers</button> <span class="muted small">A changed answer, or one ticked "checked", counts as reviewed and is kept if the sheet is read again.</span></p>
+</form>
+{% endif %}
+{% endblock %}

@@ -111,3 +111,40 @@ def test_render_download_and_scan_back(client):
 
 def test_batch_path_cannot_escape(client):
     assert client.get("/batches/..%2F..%2Fkff.db.pdf").status_code == 404
+
+
+def test_review_flow(client):
+    made = client.post(f"{BASE}/render", json={"options": {}, "copies": 1}).json()
+    pdf = client.get(made["url"]).content
+    scanned = client.post("/api/scans", files=[("files", ("s.pdf", pdf, "application/pdf"))])
+    sheet = next(r for r in scanned.json()["results"] if "scan_id" in r)
+    sheets = client.get("/sheets")
+    assert sheets.status_code == 200 and sheet["sheet"] in sheets.text
+    sheet_id = sheet["sheet"]  # a code; find the id from the list page link
+    import re
+
+    sheet_id = re.search(r'href="/sheets/([0-9a-f]{32})"', sheets.text).group(1)
+    page = client.get(f"/sheets/{sheet_id}")
+    assert "Read answers" in page.text
+
+    read = client.post(f"/sheets/{sheet_id}/read", follow_redirects=True)
+    assert "Read " in read.text and "fields" in read.text
+    # A blank sheet: the required questions are problems, so submitting is disabled.
+    assert "required, but no answer was read" in read.text
+    assert "disabled" in read.text
+
+    crop = client.get(f"/sheets/{sheet_id}/crop.png", params={"f": "consent"})
+    assert crop.status_code == 200 and crop.content.startswith(b"\x89PNG")
+    assert client.get(f"/sheets/{sheet_id}/crop.png", params={"f": "nope"}).status_code == 404
+
+    saved = client.post(
+        f"/sheets/{sheet_id}/review",
+        data={"value:age": "34", "value:consent": "yes", "ok:consent": "on", "value:full_name": ""},
+        follow_redirects=True,
+    )
+    assert "Saved 2 answer(s)" in saved.text
+    assert 'value="34"' in saved.text
+
+    # No token in this app's environment: submitting explains why it can't.
+    result = client.post(f"/sheets/{sheet_id}/submit", follow_redirects=True)
+    assert "Not submitted" in result.text

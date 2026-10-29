@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Review &amp; submit · kobo-field-forms{% endblock %}
+{% block main %}
+<section class="card">
+  <h2>Scanned sheets</h2>
+  {% if not vlm %}<p class="muted">No text reader is configured (<code>KFF_VLM_URL</code>): bubbles and digits are read, written text is left for you to type in.</p>{% endif %}
+  {% if sheets %}
+  <table>
+    <tr><th>Sheet</th><th>Form</th><th>Pages</th><th>Read</th><th>To check</th><th>Kobo</th><th></th></tr>
+    {% for s in sheets %}
+    <tr>
+      <td class="mono">{{ s.code }}</td>
+      <td>{{ s.name }}</td>
+      <td>{{ s.pages_found }}/{{ s.pages_per_sheet }}</td>
+      <td>{{ s.read or "not yet" }}</td>
+      <td>{% if s.review %}<span class="error">{{ s.review }}</span>{% elif s.read %}0{% endif %}</td>
+      <td>{% if s.submission %}{{ "submitted" if s.submission.status == 201 else "duplicate" }}{% endif %}</td>
+      <td><a class="button" href="/sheets/{{ s.sheet_id }}">Review</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No scanned sheets yet. <a href="/scans">Upload scans</a>.</p>{% endif %}
+</section>
+{% endblock %}

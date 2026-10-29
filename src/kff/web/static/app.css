@@ -39,3 +39,10 @@ fieldset label.check { justify-content: flex-start; }
 .warnings { color: #8a5a00; padding-left: 1.2rem; }
 .scan-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
 .scan img { width: 100%; border: 1px solid var(--line); margin-top: .4rem; }
+.review td { vertical-align: top; }
+.review tr.problem { background: #fff4f4; }
+.review tr.hidden-q { opacity: .55; }
+.review input:not([type=checkbox]) { width: 100%; min-width: 12rem; }
+img.crop { max-width: 420px; max-height: 160px; border: 1px solid var(--line); background: #fff; }
+button[disabled] { opacity: .5; cursor: not-allowed; }
+.row form { margin: 0; }

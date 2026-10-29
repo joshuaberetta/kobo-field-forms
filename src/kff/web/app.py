@@ -25,11 +25,14 @@ from kff.errors import ConfigError, KffError
 from kff.fetch import fetch_form, parse_asset_uid
 from kff.form.model import translations
 from kff.kobo.client import KoboClient
+from kff.read.sheet import read_sheet
+from kff.read.vlm import VlmConfig, VlmReader
 from kff.render.options import CHOICE_LAYOUTS, LANGUAGE_LAYOUTS, PAPERS, TEXT_ENTRIES, RenderOptions
 from kff.render.pdf import Sheet, merge_pdfs, render_png, render_set
-from kff.scan.extract import draw_overlay
+from kff.scan.extract import crop_image, draw_overlay
 from kff.scan.pipeline import scan_file, sheet_status
 from kff.store import FormVersion, Store, new_batch_id
+from kff.submit import assemble, submit_sheet
 
 HERE = Path(__file__).parent
 MAX_UPLOAD_BYTES = 50_000_000
@@ -69,6 +72,13 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
     def store() -> Store:
         return Store(settings.home)
 
+    def live_settings() -> Settings:
+        """The settings `kff web` started with: the token comes from its environment then,
+        never from a request."""
+        if not settings.token:
+            raise ConfigError("KOBO_TOKEN wasn't set when kff web started.")
+        return settings
+
     def get_form(asset_uid: str, version_uid: str) -> FormVersion:
         with store() as s:
             form = s.get_form(settings.server, asset_uid, version_uid)
@@ -102,7 +112,7 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
     @app.post("/fetch")
     def fetch(project: Annotated[str, Form()]) -> Response:
         try:
-            live = Settings.from_env()
+            live = live_settings()
             uid = parse_asset_uid(project)
             with KoboClient(live) as client, store() as s:
                 form = s.save_form(fetch_form(client, live.server, uid))
@@ -243,6 +253,154 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
         ok, png = cv2.imencode(".png", img)
         assert ok
         return Response(np.asarray(png).tobytes(), media_type="image/png")
+
+    # -- review -------------------------------------------------------------
+
+    def sheet_context(sheet_id: str) -> dict[str, Any]:
+        with store() as s:
+            scans = s.scans(sheet_id)
+            if not scans:
+                raise HTTPException(404, "No scans of that sheet.")
+            layout = s.get_layout(scans[0]["layout_hash"])
+            f = layout["form"]
+            form = s.get_form(f["server"], f["asset_uid"], f["version_uid"])
+            readings = s.readings(sheet_id)
+            submission = s.submission(sheet_id)
+        assembly = assemble(form, layout, readings) if readings else None
+        problems = dict(assembly.problems) if assembly else {}
+        rows = []
+        for fid, info in layout["fields"].items():
+            r = readings.get(fid)
+            rows.append(
+                {
+                    "id": fid,
+                    "info": info,
+                    "reading": r,
+                    "problem": problems.get(fid),
+                    "hidden": bool(assembly and fid in assembly.dropped),
+                    "choices": info.get("choices") or [],
+                }
+            )
+        # Problems first, then the rest in form order.
+        rows.sort(key=lambda row: row["problem"] is None)
+        return {
+            "sheet_id": sheet_id,
+            "code": Sheet(sheet_id, 0).code,
+            "form": form,
+            "layout": layout,
+            "rows": rows,
+            "pages_found": sorted(sc["page"] for sc in scans),
+            "submission": submission,
+            "problems": len(problems),
+            "read": bool(readings),
+        }
+
+    @app.get("/sheets", response_class=HTMLResponse)
+    def sheets_page(request: Request) -> HTMLResponse:
+        with store() as s:
+            sheets = []
+            for row in s.scanned_sheets():
+                readings = s.readings(row["sheet_id"])
+                sheets.append(
+                    {
+                        **row,
+                        "code": Sheet(row["sheet_id"], 0).code,
+                        "read": len(readings),
+                        "review": sum(
+                            1 for r in readings.values() if r["needs_review"] and not r["reviewed"]
+                        ),
+                        "submission": s.submission(row["sheet_id"]),
+                    }
+                )
+        return templates.TemplateResponse(
+            request, "sheets.html", {"sheets": sheets, "vlm": VlmConfig.from_env() is not None}
+        )
+
+    @app.get("/sheets/{sheet_id}", response_class=HTMLResponse)
+    def sheet_page(request: Request, sheet_id: str, message: str | None = None) -> HTMLResponse:
+        ctx = sheet_context(sheet_id)
+        return templates.TemplateResponse(
+            request,
+            "sheet.html",
+            {
+                **ctx,
+                "message": message,
+                "has_token": bool(settings.token),
+            },
+        )
+
+    @app.get("/sheets/{sheet_id}/crop.png")
+    def field_crop(sheet_id: str, f: str) -> Response:
+        """A field as scanned: every mark of it, with a little of the page around."""
+        with store() as s:
+            scans = {sc["page"]: sc for sc in s.scans(sheet_id)}
+            layout = s.get_layout(next(iter(scans.values()))["layout_hash"]) if scans else None
+        marks = [m for m in (layout or {}).get("marks", []) if m["f"] == f]
+        if not marks or marks[0]["page"] not in scans:
+            raise HTTPException(404, "No such field on the scanned pages.")
+        scan = scans[marks[0]["page"]]
+        image = cv2.imread(str(settings.home / scan["image"]), cv2.IMREAD_GRAYSCALE)
+        x0 = min(m["x"] for m in marks) - 2
+        y0 = min(m["y"] for m in marks) - 2
+        x1 = max(m["x"] + m["w"] for m in marks) + 2
+        y1 = max(m["y"] + m["h"] for m in marks) + 2
+        if any(m["k"] == "choice" for m in marks):
+            x1 += 40  # the choice labels sit to the right of their bubbles
+        box = {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0, "k": "area"}
+        ok, png = cv2.imencode(".png", crop_image(image, box, inset=0.0))
+        assert ok
+        return Response(png.tobytes(), media_type="image/png")
+
+    @app.post("/sheets/{sheet_id}/read")
+    def read_again(sheet_id: str) -> Response:
+        config = VlmConfig.from_env()
+        vlm = VlmReader(config) if config else None
+        try:
+            with store() as s:
+                readings = read_sheet(s, sheet_id, vlm)
+        finally:
+            if vlm:
+                vlm.close()
+        flagged = sum(r.needs_review for r in readings)
+        note = f"Read {len(readings)} fields; {flagged} to check."
+        if not config:
+            note += " No text reader configured (KFF_VLM_URL), so written text is left to you."
+        return RedirectResponse(f"/sheets/{sheet_id}?message={_q(note)}", status_code=303)
+
+    @app.post("/sheets/{sheet_id}/review")
+    async def save_review(request: Request, sheet_id: str) -> Response:
+        form = await request.form()
+        with store() as s:
+            current = s.readings(sheet_id)
+            saved = 0
+            for key, raw in form.items():
+                if not key.startswith("value:"):
+                    continue
+                fid = key[len("value:") :]
+                value = str(raw).strip() or None
+                old = current.get(fid)
+                confirmed = form.get(f"ok:{fid}") == "on"
+                changed = old is None or (old["value"] or None) != value
+                if changed or (confirmed and not old["reviewed"]):
+                    s.review(sheet_id, fid, value)
+                    saved += 1
+        return RedirectResponse(
+            f"/sheets/{sheet_id}?message={_q(f'Saved {saved} answer(s).')}", status_code=303
+        )
+
+    @app.post("/sheets/{sheet_id}/submit")
+    def submit(sheet_id: str) -> Response:
+        try:
+            with KoboClient(live_settings()) as client, store() as s:
+                done = submit_sheet(s, client, sheet_id)
+            note = (
+                "Submitted to Kobo."
+                if done.status == 201
+                else "Already in Kobo: this sheet was submitted before (duplicate)."
+            )
+        except (KffError, ConfigError) as err:
+            note = f"Not submitted: {err}"
+        return RedirectResponse(f"/sheets/{sheet_id}?message={_q(note)}", status_code=303)
 
     return app
 
