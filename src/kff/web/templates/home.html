@@ -1,3 +1,8 @@
+{#- The app's homepage, and (pages=True, scripts/build_pages.py) the GitHub Pages site.
+    On Pages there is no app to link to: its pages are named, not linked. -#}
+{%- macro app(href, text) -%}
+{%- if pages %}<strong>{{ text }}</strong>{% else %}<a href="{{ href }}">{{ text }}</a>{% endif -%}
+{%- endmacro -%}
 <!doctype html>
 <html lang="en">
 <head>
@@ -5,13 +10,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KoboToolbox Paper Forms: print your forms, scan them back in</title>
 <meta name="description" content="Print a deployed KoboToolbox form as numbered paper sheets, fill them in by hand, scan or photograph them, and send the answers to KoboToolbox: read offline, checked by a person.">
-<link rel="icon" href="/static/site/icon.png" type="image/png">
-<link rel="stylesheet" href="/static/site/home.css">
+<link rel="icon" href="{{ static }}/site/icon.png" type="image/png">
+<link rel="stylesheet" href="{{ static }}/site/home.css">
 </head>
 <body>
 <header class="header">
   <div class="wrap">
-    <a class="header__brand" href="/"><img src="/static/site/logo.svg" alt="KoboToolbox"><span class="header__product">Paper Forms</span></a>
+    <a class="header__brand" href="{{ home }}"><img src="{{ static }}/site/logo.svg" alt="KoboToolbox"><span class="header__product">Paper Forms</span></a>
     <ul class="header__nav">
       <li><a href="#how">How it works</a></li>
       <li><a href="#print">Printing</a></li>
@@ -20,7 +25,7 @@
       <li><a href="#review">Review</a></li>
       <li><a href="#help">Help</a></li>
     </ul>
-    <a class="button button--filled button--m" href="/forms">Open your forms</a>
+    {% if pages %}<a class="button button--filled button--m" href="{{ repo }}">View on GitHub</a>{% else %}<a class="button button--filled button--m" href="/forms">Open your forms</a>{% endif %}
   </div>
 </header>
 
@@ -30,10 +35,11 @@
     <h1>Paper forms for your KoboToolbox projects</h1>
     <p class="banner__lead">Print a deployed form as numbered sheets, fill them in with a pen where phones don't reach, then scan or photograph them. The answers are read on this computer, checked by a person where the reading is unsure, and sent to the same KoboToolbox project as every other submission.</p>
     <div class="banner__buttons">
-      <a class="button button--filled" href="/forms">Open your forms</a>
-      <a class="button button--light" href="#how">How it works</a>
+      {% if pages %}<a class="button button--filled" href="#start">Get started</a>
+      <a class="button button--light" href="{{ repo }}">View on GitHub</a>{% else %}<a class="button button--filled" href="/forms">Open your forms</a>
+      <a class="button button--light" href="#how">How it works</a>{% endif %}
     </div>
-    <div class="shot"><img src="/static/home/designer.jpg" width="1440" height="900" alt="The sheet designer: print options on the left (paper, orientation, sides, languages, layout), and on the right a live preview of a two-page sheet in English and Arabic side by side, every answer box outlined in colour."></div>
+    <div class="shot"><img src="{{ static }}/home/designer.jpg" width="1440" height="900" alt="The sheet designer: print options on the left (paper, orientation, sides, languages, layout), and on the right a live preview of a two-page sheet in English and Arabic side by side, every answer box outlined in colour."></div>
   </div>
 </section>
 
@@ -78,17 +84,17 @@
 <section id="start">
 <h2>Get started</h2>
 <ol>
-  <li><strong>Start it.</strong> Run <code>kff web</code> and open <a href="/forms">this site's forms page</a>. It runs on your own computer and only answers on it.</li>
+  <li><strong>Start it.</strong> {% if pages %}Install it from <a href="{{ repo }}">the repository</a> (<code>uv sync</code>), then run <code>kff web</code> and open <code>http://127.0.0.1:8765/forms</code>.{% else %}Run <code>kff web</code> and open {{ app("/forms", "the forms page") }}.{% endif %} It runs on your own computer and only answers on it.</li>
   <li><strong>Connect to KoboToolbox.</strong> Copy your API token from KoboToolbox (<strong>Account Settings → Security</strong>) into <code>KOBO_TOKEN</code> before starting <code>kff web</code>, and set <code>KOBO_BASE_URL</code> to <code>global</code>, <code>eu</code> or your server's address. The token is only needed to fetch forms and to submit; everything in between works without it, and without internet.</li>
   <li><strong>Fetch a form.</strong> Paste a project's link or uid on the forms page. The <em>deployed</em> version is kept here, not unsaved edits, so the printed sheets match what KoboToolbox accepts.</li>
 </ol>
-<figure><img src="/static/home/forms.jpg" width="1440" height="900" alt="The forms page: a box to fetch a form by link, the forms already fetched with their version and languages, and the batches of sheets printed so far with links to their PDFs."><figcaption>The forms page: fetch a form, then design its sheets. Printed batches are listed with their PDFs.</figcaption></figure>
+<figure><img src="{{ static }}/home/forms.jpg" width="1440" height="900" alt="The forms page: a box to fetch a form by link, the forms already fetched with their version and languages, and the batches of sheets printed so far with links to their PDFs."><figcaption>The forms page: fetch a form, then design its sheets. Printed batches are listed with their PDFs.</figcaption></figure>
 </section>
 
 <section id="print">
 <h2>Print sheets</h2>
 <p><strong>Design sheets</strong> opens the designer: change any option and the preview shows one sheet as it will print. <strong>Answer areas from the layout map</strong> outlines every box the scanner will read. <strong>Generate PDF</strong> makes a batch of sheets, each with its own number in its QR codes and in the corner of every page.</p>
-<figure><img src="/static/home/sheet-en.jpg" width="1075" height="942" alt="The top of a printed sheet: the title Household survey with the sheet number and page, a QR code and corner markers, instructions, then numbered questions: Full name with a row of letter boxes, Age with three digit boxes, a yes/no question with bubbles, and a household section that says Answer this section only if Q3 is Yes."><figcaption>A printed sheet. Questions are numbered, skip logic is written out in words, and required questions are starred.</figcaption></figure>
+<figure><img src="{{ static }}/home/sheet-en.jpg" width="1075" height="942" alt="The top of a printed sheet: the title Household survey with the sheet number and page, a QR code and corner markers, instructions, then numbered questions: Full name with a row of letter boxes, Age with three digit boxes, a yes/no question with bubbles, and a household section that says Answer this section only if Q3 is Yes."><figcaption>A printed sheet. Questions are numbered, skip logic is written out in words, and required questions are starred.</figcaption></figure>
 <p>Every question type becomes something a pen can answer:</p>
 <div class="table-scroll"><table>
   <thead><tr><th>In the form</th><th>On paper</th></tr></thead>
@@ -126,9 +132,9 @@
 <section id="languages">
 <h2>Languages and scripts</h2>
 <p>Choose a page language and any others to print with it. The page language decides the direction of the page, the sheet's own words (instructions, "Answer only if…", page labels) and how text is written in. Arabic pages run right to left; numbers are still written left to right.</p>
-<figure><img src="/static/home/sheet-bilingual.jpg" width="1280" height="905" alt="A landscape sheet with two columns of questions, each question's label in English and in Arabic side by side, choices labelled Yes / نعم, and digit boxes for age, income, date, time and location."><figcaption>English and Arabic side by side, in two question columns on landscape A4.</figcaption></figure>
+<figure><img src="{{ static }}/home/sheet-bilingual.jpg" width="1280" height="905" alt="A landscape sheet with two columns of questions, each question's label in English and in Arabic side by side, choices labelled Yes / نعم, and digit boxes for age, income, date, time and location."><figcaption>English and Arabic side by side, in two question columns on landscape A4.</figcaption></figure>
 <div class="figures">
-<figure><img src="/static/home/sheet-arabic.jpg" width="760" height="1078" alt="An A5 sheet in Arabic, in large print: questions on the right, lines to write names on, digit boxes and bubbles, all mirrored for right-to-left reading."><figcaption>An Arabic sheet on A5, in large print.</figcaption></figure>
+<figure><img src="{{ static }}/home/sheet-arabic.jpg" width="760" height="1078" alt="An A5 sheet in Arabic, in large print: questions on the right, lines to write names on, digit boxes and bubbles, all mirrored for right-to-left reading."><figcaption>An Arabic sheet on A5, in large print.</figcaption></figure>
 <div>
 <p>Latin and Arabic scripts are set up now, with fonts included, so sheets print the same everywhere and offline. Digit boxes accept Western digits and Eastern Arabic ones (٠١٢٣٤٥٦٧٨٩); both are sent to KoboToolbox as ordinary digits.</p>
 <p>The sheet's own words exist in English, French, Spanish, Portuguese and Arabic. A language without them uses English, and you get a warning. More scripts can be added to the script settings (<code>scripts.toml</code>) with their fonts.</p>
@@ -140,14 +146,14 @@
 <section id="fill">
 <h2>Filling in</h2>
 <p>The instructions box on each sheet says it in short: a dark pen, bubbles filled in (a firm cross also reads), one letter or digit per box, and writing kept inside the boxes. Questions that skip logic would hide in KoboToolbox say so ("Answer only if Q3 is Yes"); answers to them are left out when the sheet is submitted.</p>
-<figure><img src="/static/home/filled-photo.jpg" width="1000" height="817" alt="A photo of a filled-in sheet lying slightly crooked on a table: a name in capitals in the letter boxes, an age, a filled bubble for Yes, district and income answered by hand."><figcaption>A filled-in sheet, photographed at an angle. That's fine: the corner markers straighten it.</figcaption></figure>
+<figure><img src="{{ static }}/home/filled-photo.jpg" width="1000" height="817" alt="A photo of a filled-in sheet lying slightly crooked on a table: a name in capitals in the letter boxes, an age, a filled bubble for Yes, district and income answered by hand."><figcaption>A filled-in sheet, photographed at an angle. That's fine: the corner markers straighten it.</figcaption></figure>
 </section>
 
 <section id="scan">
 <h2>Scanning</h2>
-<p>On the <a href="/scans">Scans</a> page, upload scanned PDFs or photos: many pages at once, in any order, sideways or upside down. 200 dpi is plenty; a phone photo of the whole page, flat and in focus, works too. Each page is found by its markers and QR code, straightened, and shown with every answer area drawn on it, so you can see it landed right. The page also lists sheets with pages still missing.</p>
-<figure><img src="/static/home/scans.jpg" width="1440" height="900" alt="The Scans page after an upload: the photo was read as sheet 2 of a batch, page 1 of 2, with all four corner markers found and a fit of 0.1 mm, and the straightened page shown with its answer areas outlined."><figcaption>An uploaded photo, straightened, with the layout drawn on it. The fit is how far the corner markers were from where they should be.</figcaption></figure>
-<figure><img src="/static/home/registered.jpg" width="1100" height="856" alt="A straightened scan with coloured outlines on every letter box, digit box and bubble, each sitting exactly on the printed box."><figcaption>Every box outlined on the straightened scan.</figcaption></figure>
+<p>On the {{ app("/scans", "Scans") }} page, upload scanned PDFs or photos: many pages at once, in any order, sideways or upside down. 200 dpi is plenty; a phone photo of the whole page, flat and in focus, works too. Each page is found by its markers and QR code, straightened, and shown with every answer area drawn on it, so you can see it landed right. The page also lists sheets with pages still missing.</p>
+<figure><img src="{{ static }}/home/scans.jpg" width="1440" height="900" alt="The Scans page after an upload: the photo was read as sheet 2 of a batch, page 1 of 2, with all four corner markers found and a fit of 0.1 mm, and the straightened page shown with its answer areas outlined."><figcaption>An uploaded photo, straightened, with the layout drawn on it. The fit is how far the corner markers were from where they should be.</figcaption></figure>
+<figure><img src="{{ static }}/home/registered.jpg" width="1100" height="856" alt="A straightened scan with coloured outlines on every letter box, digit box and bubble, each sitting exactly on the printed box."><figcaption>Every box outlined on the straightened scan.</figcaption></figure>
 <p>A scan that can't be read says why: a marker cut off, a blurred QR code, a sheet printed from another computer's store. Scanning the same page again replaces the earlier scan.</p>
 </section>
 
@@ -164,14 +170,14 @@
 
 <section id="review">
 <h2>Review and submit</h2>
-<p><a href="/sheets">Review &amp; submit</a> lists the scanned sheets: pages found, answers read, how many to check, and whether they're in KoboToolbox yet. A sheet's page shows every question with its scanned answer beside the reading, the ones to check first.</p>
-<figure><img src="/static/home/review.jpg" width="1440" height="1100" alt="A sheet's review page: questions listed with a crop of the scanned answer, an editable value, how it was read and with what confidence, and notes such as written, but no text reader is configured. A Submit to KoboToolbox button is greyed out until the flagged answers are checked."><figcaption>Reviewing a sheet: each answer next to its scan. Submit is available once nothing is left to check.</figcaption></figure>
+<p>{{ app("/sheets", "Review & submit") }} lists the scanned sheets: pages found, answers read, how many to check, and whether they're in KoboToolbox yet. A sheet's page shows every question with its scanned answer beside the reading, the ones to check first.</p>
+<figure><img src="{{ static }}/home/review.jpg" width="1440" height="1100" alt="A sheet's review page: questions listed with a crop of the scanned answer, an editable value, how it was read and with what confidence, and notes such as written, but no text reader is configured. A Submit to KoboToolbox button is greyed out until the flagged answers are checked."><figcaption>Reviewing a sheet: each answer next to its scan. Submit is available once nothing is left to check.</figcaption></figure>
 <ul>
   <li>Correct an answer, or tick <strong>checked</strong> to confirm it. Checked answers are kept if the sheet is read again.</li>
   <li>Missing required answers and answers that break the question's rules are listed too.</li>
   <li><strong>Submit to KoboToolbox</strong> sends the sheet as one submission, against the form version it was printed from, with the sheet number as its id. Submitting a sheet twice can't make a second record: KoboToolbox recognises it as a duplicate.</li>
 </ul>
-<figure><img src="/static/home/sheets.jpg" width="1440" height="900" alt="The list of scanned sheets: each sheet's number, form, pages found, answers read, how many to check, and whether it was submitted."><figcaption>All scanned sheets at a glance.</figcaption></figure>
+<figure><img src="{{ static }}/home/sheets.jpg" width="1440" height="900" alt="The list of scanned sheets: each sheet's number, form, pages found, answers read, how many to check, and whether it was submitted."><figcaption>All scanned sheets at a glance.</figcaption></figure>
 </section>
 
 <section id="offline">
@@ -183,7 +189,7 @@
 <section id="privacy">
 <h2>Privacy and security</h2>
 <ul>
-  <li><strong>Runs on your computer.</strong> This site only answers on the computer it runs on, and refuses requests made through other addresses, so another website can't reach it.</li>
+  <li><strong>Runs on your computer.</strong> The app only answers on the computer it runs on, and refuses requests made through other addresses, so another website can't reach it.</li>
   <li><strong>Your token stays put.</strong> The KoboToolbox token is read when <code>kff web</code> starts and is only ever sent to your KoboToolbox server. The browser never sees it.</li>
   <li><strong>Scans stay here.</strong> Scanned pages and readings are kept in <code>KFF_HOME</code>. Crops of written answers go to the vision model you configure, and nowhere else; with none configured, nothing leaves the computer except the submissions.</li>
   <li><strong>Nothing is deleted from KoboToolbox.</strong> The only thing it removes there is the throwaway <code>kff-e2e-</code> test project the end-to-end test makes for itself.</li>
@@ -232,8 +238,8 @@
 <footer class="footer">
   <div class="wrap">
     <div>
-      <img src="/static/site/logo-white.svg" alt="KoboToolbox">
-      <p>KoboToolbox Paper Forms: print your KoboToolbox forms, and scan them back in. A proof of concept, running on this computer.</p>
+      <img src="{{ static }}/site/logo-white.svg" alt="KoboToolbox">
+      <p>KoboToolbox Paper Forms: print your KoboToolbox forms, and scan them back in. A proof of concept{% if not pages %}, running on this computer{% endif %}.</p>
     </div>
     <div>
       <span class="footer__label">KoboToolbox</span>
@@ -244,13 +250,19 @@
       </ul>
     </div>
     <div>
-      <span class="footer__label">This site</span>
+      {% if pages %}<span class="footer__label">The project</span>
+      <ul>
+        <li><a href="{{ repo }}">Source code</a></li>
+        <li><a href="{{ repo }}#readme">Setup and commands</a></li>
+        <li><a href="{{ repo }}/blob/main/plans/poc-plan.md">Design and progress</a></li>
+        <li><a href="#help">Help</a></li>
+      </ul>{% else %}<span class="footer__label">This site</span>
       <ul>
         <li><a href="/forms">Your forms</a></li>
         <li><a href="/scans">Scans</a></li>
         <li><a href="/sheets">Review &amp; submit</a></li>
         <li><a href="#help">Help</a></li>
-      </ul>
+      </ul>{% endif %}
     </div>
   </div>
 </footer>

@@ -95,7 +95,9 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request) -> HTMLResponse:
         """The overview for people using it: what it does, how, with screenshots."""
-        return templates.TemplateResponse(request, "home.html", {})
+        return templates.TemplateResponse(
+            request, "home.html", {"pages": False, "static": "/static", "home": "/"}
+        )
 
     @app.get("/forms", response_class=HTMLResponse)
     def index(request: Request, error: str | None = None) -> HTMLResponse:

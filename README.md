@@ -37,7 +37,9 @@ kff e2e [--offline] [--profiles a4-en,…] [--sheets 3]  # the whole loop on syn
 `uv run kff web`, then open http://127.0.0.1:8765/. The home page is a guide for
 people using it, with screenshots (`src/kff/web/templates/home.html`; regenerate the
 screenshots with `uv run python scripts/screenshots.py`, which drives the real app on a
-demo store in headless Chromium). It runs on your machine only:
+demo store in headless Chromium). The same page is published to GitHub Pages by
+`.github/workflows/pages.yml` (`scripts/build_pages.py` renders it as a static page). It
+runs on your machine only:
 
 - **Forms** (`/forms`): fetch a project (needs `KOBO_TOKEN` in the environment `kff web` was started
   from; the browser never sees it), and list the form versions and printed batches.

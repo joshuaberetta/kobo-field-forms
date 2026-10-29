@@ -1,0 +1,47 @@
+# Publish the homepage (src/kff/web/templates/home.html) to GitHub Pages.
+# Needs Settings → Pages → Source: GitHub Actions.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/kff/web/templates/home.html"
+      - "src/kff/web/static/site/**"
+      - "src/kff/web/static/home/**"
+      - "scripts/build_pages.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "jinja2>=3.1"
+      - run: python scripts/build_pages.py --out site --repo "https://github.com/${{ github.repository }}"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

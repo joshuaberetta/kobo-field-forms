@@ -4,15 +4,15 @@
  * components follow the kobotoolbox.org website: Inter for text, Lora for headings, the Kobo
  * gray scale and blues. Fonts are served from here; the page loads nothing from elsewhere.
  * kobo-dash's own additions are at the end. Copied from kobo-dash
- * (src/kobo_dash/static/home.css) on 2026-10-29, with font paths under /static/site/.
+ * (src/kobo_dash/static/home.css) on 2026-10-29, with font paths relative to this file (the app and GitHub Pages both).
  */
 
-@font-face { font-family: Inter; font-weight: 400; font-display: swap; src: url("/static/site/fonts/inter-400.woff2") format("woff2"); }
-@font-face { font-family: Inter; font-weight: 500; font-display: swap; src: url("/static/site/fonts/inter-500.woff2") format("woff2"); }
-@font-face { font-family: Inter; font-weight: 600; font-display: swap; src: url("/static/site/fonts/inter-600.woff2") format("woff2"); }
-@font-face { font-family: Inter; font-weight: 700; font-display: swap; src: url("/static/site/fonts/inter-700.woff2") format("woff2"); }
-@font-face { font-family: Lora; font-weight: 400; font-display: swap; src: url("/static/site/fonts/lora-400.woff2") format("woff2"); }
-@font-face { font-family: Lora; font-weight: 600 700; font-display: swap; src: url("/static/site/fonts/lora-700.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-weight: 400; font-display: swap; src: url("fonts/inter-400.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-weight: 500; font-display: swap; src: url("fonts/inter-500.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-weight: 600; font-display: swap; src: url("fonts/inter-600.woff2") format("woff2"); }
+@font-face { font-family: Inter; font-weight: 700; font-display: swap; src: url("fonts/inter-700.woff2") format("woff2"); }
+@font-face { font-family: Lora; font-weight: 400; font-display: swap; src: url("fonts/lora-400.woff2") format("woff2"); }
+@font-face { font-family: Lora; font-weight: 600 700; font-display: swap; src: url("fonts/lora-700.woff2") format("woff2"); }
 
 :root {
   --gray-14: #1e2129;
