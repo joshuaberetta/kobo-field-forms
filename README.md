@@ -5,7 +5,8 @@ form, fill it in by hand, scan it, read it offline, and submit the answers to Ko
 page carries a QR code that ties it to the exact form version it was printed from.
 
 **Status: proof of concept.** See [plans/poc-plan.md](plans/poc-plan.md) for the design and
-milestones. Done so far: fetch, render (with print options) and scan (registration).
+milestones. Done so far: fetch, render (with print options), scan (registration) and a
+local web interface.
 
 ## Setup
 
@@ -24,7 +25,21 @@ kff show <uid> [--version <vuid>]                    # a stored version's form J
 kff render <uid> --copies 20 [options]               # printable sheets (PDF)
 kff batches                                          # rendered batches of sheets
 kff scan scans/*.pdf photo.jpg [--debug out/dbg]      # register scanned pages
+kff web [--port 8765]                                # local web interface
 ```
+
+### Web interface
+
+`uv run kff web`, then open http://127.0.0.1:8765/. It runs on your machine only:
+
+- **Forms:** fetch a project (needs `KOBO_TOKEN` in the environment `kff web` was started
+  from; the browser never sees it), and list the form versions and printed batches.
+- **Design sheets:** every print option, with a live preview of one sheet as you change
+  them. "Answer areas from the layout map" overlays every box the scanner will read.
+  "Generate PDF" renders a batch of numbered sheets (kept in `KFF_HOME/batches/`).
+- **Scans:** upload scanned PDFs or photos; each page shows how it registered (the
+  straightened page with the layout map drawn on it) and which pages of each sheet are
+  still missing.
 
 `render` writes a PDF (default `out/<uid>-<batch>.pdf`) of numbered sheets. Every page has
 four corner markers and a QR code naming the form version, layout and sheet, so scanned

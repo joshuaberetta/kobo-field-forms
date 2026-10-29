@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Scans · kobo-field-forms{% endblock %}
+{% block main %}
+<section class="card">
+  <h2>Upload scans</h2>
+  <form id="upload" class="row">
+    <input type="file" name="files" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.bmp" required>
+    <button>Read pages</button>
+  </form>
+  <p class="muted">Scanned PDFs or photos of sheets printed from this store. Each page is found by its corner markers and QR code and straightened; answers are read in a later step.</p>
+  <div id="upload-result"></div>
+</section>
+
+<section class="card">
+  <h2>Scanned pages</h2>
+  {% if scans %}
+  <table>
+    <tr><th>Sheet</th><th>Page</th><th>Source</th><th>Fit</th><th></th></tr>
+    {% for s in scans %}
+    {% set st = statuses.get(s.sheet_id) %}
+    <tr>
+      <td class="mono">{{ code(s.sheet_id) }}{% if st and st.missing %} <span class="error small">missing {{ st.missing | join(", ") }}</span>{% endif %}</td>
+      <td>{{ s.page }}{% if st %} / {{ st.pages }}{% endif %}</td>
+      <td>{{ s.source }}</td>
+      <td>{{ "%.2f" | format(s.residual_mm) }} mm · {{ s.markers }}/4 markers</td>
+      <td><a href="/scans/{{ s.scan_id }}/overlay.png" target="_blank">overlay</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+</section>
+<script src="/static/scans.js"></script>
+{% endblock %}

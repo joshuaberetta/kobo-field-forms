@@ -3,9 +3,7 @@
 import argparse
 import json
 import logging
-import secrets
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
@@ -24,7 +22,7 @@ from kff.render.options import (
 from kff.render.pdf import merge_pdfs, render_png, render_set
 from kff.scan.extract import crops, overlay
 from kff.scan.pipeline import scan_file, sheet_status
-from kff.store import FormVersion, Store
+from kff.store import FormVersion, Store, new_batch_id
 
 
 def _summary(form: FormVersion) -> str:
@@ -129,10 +127,6 @@ def cmd_render(args: argparse.Namespace) -> None:
         print(f"warning: {warning}", file=sys.stderr)
 
 
-def new_batch_id() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
-
-
 def cmd_batches(args: argparse.Namespace) -> None:
     settings = Settings.from_env(need_token=False)
     with Store(settings.home) as store:
@@ -178,6 +172,24 @@ def cmd_scan(args: argparse.Namespace) -> None:
         print(f"sheet {st.code}: {len(st.found)}/{st.pages} pages{missing}")
     if failed:
         raise KffError(f"{failed} page(s) couldn't be read.")
+
+
+def cmd_web(args: argparse.Namespace) -> None:
+    # Imported here so the other commands don't pay for loading the web stack.
+    import uvicorn
+
+    from kff.web.app import LOCAL_HOSTS, create_app
+
+    settings = Settings.from_env(need_token=False)
+    extra = [] if args.host in LOCAL_HOSTS else [args.host]
+    if extra:
+        print(
+            f"warning: serving on {args.host}: anyone who can reach it can fetch forms with "
+            "your token and read your scans. Prefer an SSH tunnel to 127.0.0.1.",
+            file=sys.stderr,
+        )
+    print(f"kff web: http://{args.host}:{args.port}/  (store: {settings.home})")
+    uvicorn.run(create_app(settings, extra), host=args.host, port=args.port, log_level="warning")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -236,6 +248,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dpi", type=int, default=200, help="rasterising resolution for PDFs")
     p.add_argument("--debug", help="write overlays and field crops to this directory")
     p.set_defaults(func=cmd_scan)
+
+    p = sub.add_parser("web", help="local web interface: design, preview, print, scan")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.set_defaults(func=cmd_web)
     return parser
 
 

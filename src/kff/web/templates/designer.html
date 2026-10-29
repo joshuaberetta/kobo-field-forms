@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ form.name }} · kobo-field-forms{% endblock %}
+{% block main %}
+<div class="designer" data-asset="{{ form.asset_uid }}" data-version="{{ form.version_uid }}">
+  <aside class="card options" id="options">
+    <h2>{{ form.name }}</h2>
+    <p class="muted mono">{{ form.asset_uid }} · v{{ form.version_number or "?" }}</p>
+
+    <fieldset><legend>Paper</legend>
+      <label>Size <select name="paper">{% for p in papers %}<option {% if p == defaults.paper %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+      <label>Orientation <select name="orientation"><option>portrait</option><option>landscape</option></select></label>
+      <label>Sides <select name="sides"><option value="single">single-sided</option><option value="double">double-sided</option></select></label>
+      <label>Question columns <select name="columns"><option>1</option><option>2</option></select></label>
+    </fieldset>
+
+    <fieldset><legend>Languages</legend>
+      {% if languages|length > 1 %}
+      <label>Page language <select name="primary">{% for l in languages %}<option value="{{ l }}">{{ l }}</option>{% endfor %}</select></label>
+      <div class="also">Also print in:
+        {% for l in languages %}<label class="check"><input type="checkbox" name="also" value="{{ l }}"> {{ l }}</label>{% endfor %}
+      </div>
+      <label>Several languages <select name="language_layout">{% for v in language_layouts %}<option value="{{ v }}">{{ {"stacked": "stacked", "columns": "side by side", "per-sheet": "separate sheets"}[v] }}</option>{% endfor %}</select></label>
+      {% else %}
+      <p class="muted">{{ languages[0] or "One language" }}</p>
+      {% endif %}
+    </fieldset>
+
+    <fieldset><legend>Layout</legend>
+      <label>Font size <input type="number" name="font_size" value="{{ defaults.font_size }}" min="7" max="16" step="0.5"></label>
+      <label>Choices <select name="choice_layout">{% for v in choice_layouts %}<option>{{ v }}</option>{% endfor %}</select></label>
+      <label>Text answers <select name="text_entry">{% for v in text_entries %}<option value="{{ v }}">{{ {"auto": "auto (by script)", "comb": "letter boxes", "lines": "lines"}[v] }}</option>{% endfor %}</select></label>
+      <label>Rows for open repeats <input type="number" name="repeat_rows" value="{{ defaults.repeat_rows }}" min="1" max="50"></label>
+    </fieldset>
+
+    <fieldset><legend>Show</legend>
+      <label class="check"><input type="checkbox" name="show_hints" checked> hints</label>
+      <label class="check"><input type="checkbox" name="show_conditions" checked> skip logic</label>
+      <label class="check"><input type="checkbox" name="show_numbers" checked> question numbers</label>
+      <label class="check"><input type="checkbox" name="show_instructions" checked> instructions</label>
+      <label class="check"><input type="checkbox" name="show_names"> field names (testing)</label>
+      <label class="check"><input type="checkbox" id="show_marks"> answer areas from the layout map</label>
+    </fieldset>
+
+    <fieldset><legend>Print</legend>
+      <label>Copies <input type="number" id="copies" value="10" min="1" max="500"></label>
+      <button id="generate">Generate PDF</button>
+      <p id="result" class="muted"></p>
+      <p class="muted small">Each copy gets its own sheet id in its QR codes, so don't photocopy sheets: print more.</p>
+    </fieldset>
+  </aside>
+
+  <section class="preview">
+    <div id="status" class="muted">Rendering…</div>
+    <ul id="warnings" class="warnings"></ul>
+    <div id="pages"></div>
+  </section>
+</div>
+<script src="/static/designer.js"></script>
+{% endblock %}

@@ -1,6 +1,6 @@
 # kobo-field-forms — PoC plan
 
-Status: **in progress.** Milestones 1, 2, 3 and 2b done (2026-10-29, branches `milestone-1` … `milestone-2b`).
+Status: **in progress.** Milestones 1, 2, 3, 2b and a local web interface done (2026-10-29, branches `milestone-1` … `web`).
 
 Progress:
 - **Milestone 1 (skeleton + fetch): done.** `kff fetch | forms | show`, SQLite store
@@ -98,6 +98,18 @@ Progress:
   - **Refused up front** (`Geometry.check`): question columns under 80 mm, text rows under
     8 boxes, languages side by side under 45 mm each. **Refused after layout:** a
     question taller than a page (marks below the body), naming the question.
+- **Local web interface (asked for 2026-10-29): done.** `kff web` (FastAPI + Jinja,
+  vanilla JS, no build step): fetch forms, a sheet designer with every print option and
+  a live one-sheet preview (72 ppi PNGs, ~0.3 s), an overlay of the layout map's answer
+  areas, "Generate PDF" batches (`KFF_HOME/batches/`), and a scans page (upload, see each
+  registered page with the map drawn on it, missing pages per sheet). Checked in headless
+  Chromium (no console errors) and by `tests/unit/test_web.py`.
+  - **Local only:** binds 127.0.0.1 and refuses any other Host header
+    (`TrustedHostMiddleware`), so another site can't reach it by DNS rebinding. The Kobo
+    token stays in the server's environment. `--host` elsewhere warns; for the droplet use
+    an SSH tunnel.
+  - This replaces the plan's milestone 7 review UI as the base: review (crops next to
+    read values, edit, submit) is added to it in milestone 7.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.
@@ -348,7 +360,7 @@ kobo-field-forms/
     assemble.py           values → answers, constraints, relevance, multi-page grouping
     submit.py             answers → OpenRosa XML → /submission
     store.py              local store (SQLite + files): forms, layouts, sheets, scans, results
-    web/                  FastAPI review UI
+    web/                  FastAPI app: designer, preview, batches, scans (later: review)
     scripts.toml          script registry: fonts, direction, digit sets, text entry
     render/form.typ       the Typst template
     render/fonts/         bundled OFL fonts (Noto Sans, Noto Naskh Arabic, …)

@@ -54,10 +54,18 @@ def ink(image: np.ndarray) -> float:
 def overlay(registered: Registered) -> np.ndarray:
     """The registered page in colour with every mapped answer area outlined, to check by
     eye that the map lands on the boxes."""
-    img = cv2.cvtColor(registered.image, cv2.COLOR_GRAY2BGR)
+    return draw_overlay(registered.image, registered.layout, registered.ref.page)
+
+
+def draw_overlay(image: np.ndarray, layout: dict[str, Any], page: int) -> np.ndarray:
+    """`overlay` for an upright page image (at PX_PER_MM) read back from the store."""
+    img = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR) if image.ndim == 2 else image.copy()
     colours = {"cell": (0, 140, 255), "choice": (220, 60, 0), "area": (0, 170, 0)}
-    for mark in page_marks(registered):
-        x0, y0 = registered.to_px(mark["x"], mark["y"])
-        x1, y1 = registered.to_px(mark["x"] + mark["w"], mark["y"] + mark["h"])
+    for mark in layout["marks"]:
+        if mark["page"] != page:
+            continue
+        x0, y0 = round(mark["x"] * PX_PER_MM), round(mark["y"] * PX_PER_MM)
+        x1 = round((mark["x"] + mark["w"]) * PX_PER_MM)
+        y1 = round((mark["y"] + mark["h"]) * PX_PER_MM)
         cv2.rectangle(img, (x0, y0), (x1, y1), colours.get(mark["k"], (0, 0, 255)), 2)
     return img

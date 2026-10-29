@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="card">
+  <h2>Fetch a form</h2>
+  {% if has_token %}
+  <form method="post" action="/fetch" class="row">
+    <input name="project" placeholder="Project uid or link, e.g. https://kf.kobotoolbox.org/#/forms/a…" required>
+    <button>Fetch deployed version</button>
+  </form>
+  <p class="muted">From {{ server }}. The deployed version is stored locally; everything else works offline.</p>
+  {% else %}
+  <p class="muted">Set <code>KOBO_TOKEN</code> (and <code>KOBO_BASE_URL</code>) before <code>kff web</code> to fetch forms. Forms already in the store work without it.</p>
+  {% endif %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Forms in the store</h2>
+  {% if forms %}
+  <table>
+    <tr><th>Form</th><th>Version</th><th>Deployed</th><th>Languages</th><th></th></tr>
+    {% for f in forms %}
+    <tr>
+      <td>{{ f.name }}<div class="muted mono">{{ f.asset_uid }}</div></td>
+      <td>v{{ f.version_number or "?" }}<div class="muted mono">{{ f.version_uid }}</div></td>
+      <td>{{ (f.date_deployed or "")[:10] }}</td>
+      <td>{{ f.languages | map("default", "(default)", true) | join(", ") or "(default)" }}</td>
+      <td><a class="button" href="/forms/{{ f.asset_uid }}/{{ f.version_uid }}">Design sheets</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">None yet. Fetch one above, or run <code>kff fetch &lt;uid&gt;</code>.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Printed batches</h2>
+  {% if batches %}
+  <table>
+    <tr><th>Batch</th><th>Form</th><th>Sheets</th><th>Layout</th><th></th></tr>
+    {% for b in batches %}
+    <tr>
+      <td class="mono">{{ b.batch }}</td><td>{{ b.name }}</td><td>{{ b.sheets }}</td>
+      <td class="mono">{{ b.layout_hash }}</td>
+      <td><a href="/batches/{{ b.batch }}.pdf">PDF</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">None yet.</p>{% endif %}
+</section>
+{% endblock %}

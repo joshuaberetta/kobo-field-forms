@@ -6,6 +6,7 @@ code's layout hash finds the layout map, and its sheet id the printed sheet.
 """
 
 import json
+import secrets
 import sqlite3
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -268,6 +269,11 @@ class Store:
     def get_scan(self, scan_id: str) -> dict[str, Any] | None:
         row = self._db.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
         return dict(row) if row else None
+
+
+def new_batch_id() -> str:
+    """One per render: when, plus a little randomness (`20261029-115054-c1cc`)."""
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
 
 
 def _now() -> str:
