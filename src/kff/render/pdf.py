@@ -96,11 +96,11 @@ def marker_bits() -> list[list[list[int]]]:
     return [(cv2.aruco.generateImageMarker(dictionary, i, 6) // 255).tolist() for i in MARKER_IDS]
 
 
-def _compiler(data: dict[str, Any]) -> typst.Compiler:
+def _compiler(data: dict[str, Any], extra_fonts: list[Path] | None = None) -> typst.Compiler:
     return typst.Compiler(
         TEMPLATE,
         root=HERE,
-        font_paths=[FONTS],
+        font_paths=[FONTS, *(extra_fonts or [])],
         ignore_system_fonts=True,
         sys_inputs={"data": json.dumps(data, ensure_ascii=False)},
     )
@@ -294,10 +294,23 @@ def _sheet_data(sheet: Sheet, layout_hash: str, pages: int) -> dict[str, Any]:
     }
 
 
-def render_png(rendered: Rendered, ppi: float = 100) -> list[bytes]:
-    """PNG pages of the first sheet (a preview; the PDF is what gets printed)."""
-    sheet = _sheet_data(rendered.sheets[0], rendered.layout_hash, rendered.pages_per_sheet)
-    out = _compiler({**rendered.data, "sheets": [sheet]}).compile(format="png", ppi=ppi)
+def render_png(
+    rendered: Rendered,
+    ppi: float = 100,
+    *,
+    sheet_index: int = 0,
+    fill: list[dict[str, Any]] | None = None,
+    extra_fonts: list[Path] | None = None,
+) -> list[bytes]:
+    """PNG pages of one sheet (a preview; the PDF is what gets printed). `fill` draws
+    answers in (synth.fill), with its handwriting fonts in `extra_fonts`."""
+    sheet = rendered.sheets[sheet_index]
+    data = {
+        **rendered.data,
+        "sheets": [_sheet_data(sheet, rendered.layout_hash, rendered.pages_per_sheet)],
+        "fill": fill or [],
+    }
+    out = _compiler(data, extra_fonts).compile(format="png", ppi=ppi)
     return out if isinstance(out, list) else [out]
 
 

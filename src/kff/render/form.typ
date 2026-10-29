@@ -132,6 +132,33 @@
     [#metadata((k: "qr", page: abs, x: qx, y: qy, w: q, h: q))<page-mark>])
   [#metadata((k: "page", page: abs, sheet: s, sheet_page: p))<page-mark>]
 
+  // Synthetic answers (synth/fill.py), drawn only for test scans: never in a printed PDF.
+  for f in data.at("fill", default: ()).filter(f => f.page == p) {
+    let pen = rgb(f.pen)
+    let at(body) = place(top + left, dx: (f.x + f.dx) * 1mm, dy: (f.y + f.dy) * 1mm, body)
+    if f.k == "char" {
+      at(box(width: f.w * 1mm, height: f.h * 1mm, align(center + horizon,
+        rotate(f.rot * 1deg, text(font: f.font, size: f.size * 1pt, fill: pen, fallback: true, f.text)))))
+    } else if f.k == "blob" {
+      let cx = f.w / 2 - f.rx
+      let cy = f.h / 2 - f.ry
+      at(place(top + left, dx: cx * 1mm, dy: cy * 1mm,
+        ellipse(width: 2 * f.rx * 1mm, height: 2 * f.ry * 1mm, fill: pen, stroke: none)))
+    } else if f.k == "cross" {
+      let s = 0.6pt + pen
+      at({
+        place(line(start: (0.5mm, 0.5mm), end: ((f.w - 0.5) * 1mm, (f.h - 0.5) * 1mm), stroke: 1.3pt + pen))
+        place(line(start: ((f.w - 0.5) * 1mm, 0.5mm), end: (0.5mm, (f.h - 0.5) * 1mm), stroke: 1.3pt + pen))
+      })
+    } else if f.k == "text" {
+      at(box(width: (f.w - 2 * f.dx) * 1mm, height: f.h * 1mm,
+        align(if f.dir == "rtl" { right } else { left },
+          rotate(f.rot * 1deg, origin: left + top, text(font: f.font, size: f.size * 1pt, fill: pen,
+            dir: if f.dir == "rtl" { rtl } else { ltr }, lang: if f.dir == "rtl" { "ar" } else { "en" },
+            fallback: true, f.text)))))
+    }
+  }
+
   // Title block, between the top-left marker and the QR code.
   let tx = off + size + geo.qr_gap
   place(top + left, dx: tx * 1mm, dy: off * 1mm, block(width: (qx - tx - geo.qr_gap) * 1mm, {
@@ -146,10 +173,15 @@
 
   // Footer, between the bottom markers. Identifiers read left to right.
   place(top + left, dx: tx * 1mm, dy: (h - off - size / 2 - 2) * 1mm,
-    block(width: (w - 2 * tx) * 1mm, align(center, text(size: 0.7em, fill: ink, dir: ltr, {
-      [#data.form.asset_uid · #data.form.version_label · layout #data.layout_hash]
-      if sheet != none [ · #sheet.code]
-    }))))
+    block(width: (w - 2 * tx) * 1mm, {
+      // The paragraph's own direction, not just the text's: else on an Arabic page the
+      // codes come out reversed (`3411-FA39`).
+      set text(dir: ltr, size: 0.7em, fill: ink)
+      align(center, {
+        [#data.form.asset_uid · #data.form.version_label · layout #data.layout_hash]
+        if sheet != none [ · #sheet.code]
+      })
+    }))
 }
 
 #let double = opts.sides == "double"

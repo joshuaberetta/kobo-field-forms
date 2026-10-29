@@ -110,6 +110,19 @@ Progress:
     an SSH tunnel.
   - This replaces the plan's milestone 7 review UI as the base: review (crops next to
     read values, edit, submit) is added to it in milestone 7.
+- **Milestone 4 (synthetic filled sheets): done.** `form/xpath.py` (an evaluator for the
+  usual XLSForm skip-logic/constraint XPath; anything else raises `Unsupported` and the
+  rule counts as unknown), `form/rules.py` (`${name}` resolved in the asking question's
+  repeat instance; group relevance), `synth/answers.py` (valid random answers that
+  follow skip logic and constraints; Arabic sheets write Eastern Arabic digits half the
+  time; capitals in letter boxes), `synth/fill.py` (a fill layer drawn by the same
+  template: handwriting fonts with jitter and tilt per character, uneven bubble fills,
+  some boxes crossed instead of filled, text on lines right to left for Arabic).
+  - **The fill layer reuses the template** (`data.fill`, drawn in the foreground at the
+    layout map's positions), so filled sheets are exact and need no image library.
+  - Found on the way: on an Arabic page the footer's sheet code came out reversed
+    (`3411-FA39`): `text(dir: ltr)` around content doesn't set the *paragraph*
+    direction; `set text(dir: ltr)` inside the block does.
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.
