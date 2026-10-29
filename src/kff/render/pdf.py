@@ -30,7 +30,7 @@ from kff.store import FormVersion
 HERE = Path(__file__).parent
 TEMPLATE = HERE / "form.typ"
 FONTS = HERE / "fonts"
-QR_PREFIX = "kff1"
+QR_PREFIX = "KFF1"
 # Marker ids by corner: top-left, top-right, bottom-right, bottom-left.
 MARKER_DICT = cv2.aruco.DICT_4X4_50
 MARKER_IDS = (0, 1, 2, 3)
@@ -68,18 +68,11 @@ class Rendered:
         return self.layout["pages_per_sheet"]
 
 
-def qr_payload(form: FormVersion, layout_hash: str, sheet_id: str, page: int, pages: int) -> str:
-    return "|".join(
-        [
-            QR_PREFIX,
-            form.server,
-            form.asset_uid,
-            form.version_uid,
-            layout_hash,
-            sheet_id,
-            f"{page}/{pages}",
-        ]
-    )
+def qr_payload(layout_hash: str, sheet_id: str, page: int, pages: int) -> str:
+    """`KFF1:<LAYOUT>:<SHEET>:<page>/<pages>`, in QR alphanumeric characters only (digits,
+    capitals, `:` and `/`), which pack 5.5 bits each instead of 8. The layout hash finds the
+    form version in the store; the footer prints the form's uids for people."""
+    return f"{QR_PREFIX}:{layout_hash.upper()}:{sheet_id.upper()}:{page}/{pages}"
 
 
 def _qr_svg(payload: str) -> str:
@@ -186,9 +179,7 @@ def render(
     sheet_data = [
         {
             "code": s.code,
-            "qr": [
-                _qr_svg(qr_payload(form, layout_hash, s.id, p, pages)) for p in range(1, pages + 1)
-            ],
+            "qr": [_qr_svg(qr_payload(layout_hash, s.id, p, pages)) for p in range(1, pages + 1)],
         }
         for s in sheets
     ]
@@ -242,7 +233,7 @@ def render_png(rendered: Rendered, form: FormVersion, ppi: float = 100) -> list[
             {
                 "code": sheet.code,
                 "qr": [
-                    _qr_svg(qr_payload(form, rendered.layout_hash, sheet.id, p, pages))
+                    _qr_svg(qr_payload(rendered.layout_hash, sheet.id, p, pages))
                     for p in range(1, pages + 1)
                 ],
             }

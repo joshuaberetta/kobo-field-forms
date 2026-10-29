@@ -45,7 +45,7 @@ class Geometry:
 
     marker_size: float = 9.0
     marker_offset: float = 7.0
-    qr_size: float = 22.0
+    qr_size: float = 25.0
     qr_gap: float = 3.0
     margin_x: float = 17.0
     margin_bottom: float = 22.0

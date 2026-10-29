@@ -1,6 +1,6 @@
 # kobo-field-forms — PoC plan
 
-Status: **in progress.** Milestones 1 and 2 done (2026-10-29, branches `milestone-1`, `milestone-2`).
+Status: **in progress.** Milestones 1, 2 and 3 done (2026-10-29, branches `milestone-1` … `milestone-3`).
 
 Progress:
 - **Milestone 1 (skeleton + fetch): done.** `kff fetch | forms | show`, SQLite store
@@ -46,6 +46,31 @@ Progress:
     registry); the condition sentence mixes directions.
   - **Glyph gap:** Noto Sans has no `↳`; with `fallback: false` a missing glyph shows as
     a box rather than silently using another font. Kept that way: it shows up in review.
+- **Milestone 3 (register + extract): done.** `kff scan FILES… [--debug DIR]`;
+  `scan/load.py` (PDF via pypdfium2, images via OpenCV), `scan/register.py`,
+  `scan/extract.py`, `scan/pipeline.py`, `synth/degrade.py`; a `scans` table (schema 3)
+  and upright page PNGs under `KFF_HOME/scans/`.
+  - **Accuracy** (`tests/unit/test_scan.py`, the 2-page fixture at 200 ppi): clean,
+    rotated 3°, skewed with perspective, upside down, 150 dpi blurry JPEG, and a "phone
+    photo" (5% perspective, 4°, blur, noise, JPEG 70) all register with the *true* error
+    at every answer area ≤ 0.16 mm, 20–40 ms a page. A filled bubble reads ~0.97 ink,
+    blank boxes 0.00, so OMR thresholds have a wide margin.
+  - **The QR payload changed** from the plan's `kff1|server|asset|version|hash|sheet|p/N`
+    (113 bytes, version 9, 0.39 mm modules) to **`KFF1:<HASH>:<SHEET>:<p>/<N>`** (48
+    characters, all QR-alphanumeric, version 5 at level Q) printed at **25 mm** (≈0.6 mm
+    modules). Measured: the long payload at 22 mm decoded in 0–2 of 3 blur levels at
+    100–150 dpi; the short one at 26 mm in 3/3 down to 100 dpi. The layout hash finds the
+    form version in the store, and the footer still prints the asset and version uids for
+    people. `|` isn't QR-alphanumeric, so the separator is `:`.
+  - **zxing-cpp** reads the QR first (it decodes blurrier codes than OpenCV's detector),
+    OpenCV second. If neither reads the whole scan, the page is warped upright from the
+    markers (trying each paper size by aspect ratio) and the QR corner read at 12 px/mm.
+  - **Homography** from all 16 marker corners (≥3 markers needed); a mean corner error
+    above 1 mm is refused rather than read from the wrong places.
+  - **Photocopies share a sheet id**, so two filled-in copies would be one submission
+    (Kobo answers the second with 202 duplicate). `kff scan` notes any sheet the store
+    didn't print. Tell people not to photocopy sheets; print more instead.
+  - A rescan of the same sheet page replaces the earlier scan (kept, not current).
 
 Decided (2026-10-29):
 - **e2e runs against kf.kobotoolbox.org** with a test account.
@@ -134,14 +159,17 @@ Yes, with two adjustments:
 
 ### QR payload
 
-Compact and versioned, ~150 bytes, so it can use error correction level Q/H:
+Short, so the modules are big enough for a blurry 100–150 dpi scan (see milestone 3's
+measurements): 48 QR-alphanumeric characters, version 5, level Q, 25 mm.
 
 ```
-kff1|<server host>|<asset uid>|<version uid>|<layout hash 8>|<sheet id>|<page>/<pages>
+KFF1:<LAYOUT HASH 8>:<SHEET ID 32 hex>:<page>/<pages>
 ```
 
-The layout hash covers the Typst template version and the render options, so a re-render
-with different options can't be decoded with the wrong map.
+The layout hash covers the Typst template, the render options and the form version, so
+it names the form (server, asset, version) through the store's layout map, and a
+re-render with different options can't be decoded with the wrong map. The footer prints
+the asset and version uids for people.
 
 **Every page carries its own QR and corner markers**, front and back. Pages can then be
 scanned in any order, upside down (the markers give the orientation), or as single sheets

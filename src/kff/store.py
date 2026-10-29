@@ -15,7 +15,7 @@ from typing import Any
 
 from kff.errors import KffError
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _MIGRATIONS = {
     1: """
@@ -52,6 +52,21 @@ _MIGRATIONS = {
         created_at  TEXT NOT NULL
     );
     CREATE INDEX sheets_batch ON sheets (batch);
+    """,
+    3: """
+    CREATE TABLE scans (
+        scan_id     TEXT PRIMARY KEY,
+        sheet_id    TEXT NOT NULL,         -- from the QR code; may be unknown to sheets
+        page        INTEGER NOT NULL,
+        layout_hash TEXT NOT NULL REFERENCES layouts,
+        source      TEXT NOT NULL,         -- file name, `#n` for a page in a PDF
+        image       TEXT NOT NULL,         -- registered page PNG, relative to KFF_HOME
+        residual_mm REAL NOT NULL,
+        markers     INTEGER NOT NULL,      -- corner markers found (3 or 4)
+        created_at  TEXT NOT NULL,
+        current     INTEGER NOT NULL DEFAULT 1  -- 0 once a rescan of the page replaces it
+    );
+    CREATE INDEX scans_sheet ON scans (sheet_id, page);
     """,
 }
 
@@ -213,6 +228,46 @@ class Store:
             """
         )
         return [dict(r) for r in rows]
+
+    # -- scans --------------------------------------------------------------
+
+    def save_scan(self, scan: dict[str, Any]) -> bool:
+        """Record a registered page. A rescan of the same sheet page replaces the earlier
+        one (which is kept, not current). Returns True if it replaced one."""
+        with self._db:
+            replaced = self._db.execute(
+                "UPDATE scans SET current = 0 WHERE sheet_id = ? AND page = ? AND current = 1",
+                (scan["sheet_id"], scan["page"]),
+            ).rowcount
+            self._db.execute(
+                """INSERT INTO scans (scan_id, sheet_id, page, layout_hash, source, image,
+                residual_mm, markers, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    scan["scan_id"],
+                    scan["sheet_id"],
+                    scan["page"],
+                    scan["layout_hash"],
+                    scan["source"],
+                    scan["image"],
+                    scan["residual_mm"],
+                    scan["markers"],
+                    _now(),
+                ),
+            )
+        return bool(replaced)
+
+    def scans(self, sheet_id: str | None = None) -> list[dict[str, Any]]:
+        """Current scans, by sheet then page."""
+        sql = "SELECT * FROM scans WHERE current = 1"
+        args: tuple[str, ...] = ()
+        if sheet_id:
+            sql += " AND sheet_id = ?"
+            args = (sheet_id,)
+        return [dict(r) for r in self._db.execute(sql + " ORDER BY sheet_id, page", args)]
+
+    def get_scan(self, scan_id: str) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
+        return dict(row) if row else None
 
 
 def _now() -> str:

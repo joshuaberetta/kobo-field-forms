@@ -106,11 +106,11 @@ def test_markers_found_where_the_layout_says(rendered, pages):
             assert np.hypot(*(found[m["id"]] - (m["x"], m["y"]))) < 0.3
 
 
-def test_qr_codes_decode_to_their_page(form, rendered, pages):
+def test_qr_codes_decode_to_their_page(rendered, pages):
     detector = cv2.QRCodeDetector()
     for p, img in enumerate(pages, 1):
         text, _, _ = detector.detectAndDecode(img)
-        assert text == qr_payload(form, rendered.layout_hash, SHEET_IDS[0], p, 2)
+        assert text == qr_payload(rendered.layout_hash, SHEET_IDS[0], p, 2)
 
 
 def test_boxes_are_drawn_where_the_layout_says(rendered, pages):

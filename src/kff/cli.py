@@ -8,12 +8,16 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import cv2
+
 from kff.config import Settings
 from kff.errors import KffError
 from kff.fetch import fetch_form, parse_asset_uid
 from kff.kobo.client import KoboClient
 from kff.render.options import PAPERS, RenderOptions
 from kff.render.pdf import render, render_png
+from kff.scan.extract import crops, overlay
+from kff.scan.pipeline import scan_file, sheet_status
 from kff.store import FormVersion, Store
 
 
@@ -108,6 +112,43 @@ def cmd_batches(args: argparse.Namespace) -> None:
             )
 
 
+def cmd_scan(args: argparse.Namespace) -> None:
+    settings = Settings.from_env(need_token=False)
+    debug = Path(args.debug) if args.debug else None
+    failed = 0
+    sheets: list[str] = []
+    with Store(settings.home) as store:
+        for name in args.files:
+            for result in scan_file(store, Path(name), dpi=args.dpi):
+                reg = result.registered
+                if reg is None:
+                    failed += 1
+                    print(f"{result.source}: FAILED: {result.error}")
+                    continue
+                sheets.append(reg.ref.sheet_id)
+                code = f"{reg.ref.sheet_id[:4]}-{reg.ref.sheet_id[4:8]}".upper()
+                print(
+                    f"{result.source}: sheet {code} page {reg.ref.page}/{reg.ref.pages}  "
+                    f"markers {len(reg.markers)}/4  error {reg.residual_mm:.2f} mm"
+                )
+                for note in result.notes:
+                    print(f"  note: {note}")
+                if debug:
+                    stem = f"{code}-p{reg.ref.page}"
+                    debug.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(debug / f"{stem}-overlay.png"), overlay(reg))
+                    for fid, items in crops(reg).items():
+                        for i, c in enumerate(items):
+                            safe = fid.replace("/", "_").replace("[", "_").replace("]", "")
+                            cv2.imwrite(str(debug / f"{stem}-{safe}-{i}.png"), c.image)
+        statuses = sheet_status(store, sheets)
+    for st in statuses:
+        missing = f"  missing pages {st.missing}" if st.missing else "  complete"
+        print(f"sheet {st.code}: {len(st.found)}/{st.pages} pages{missing}")
+    if failed:
+        raise KffError(f"{failed} page(s) couldn't be read.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kff", description="Paper forms for KoboToolbox.")
     parser.add_argument("-v", "--verbose", action="store_true", help="log requests")
@@ -146,6 +187,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("batches", help="list rendered batches of sheets")
     p.set_defaults(func=cmd_batches)
+
+    p = sub.add_parser("scan", help="read scanned pages (PDF or images) into the store")
+    p.add_argument("files", nargs="+", help="scanned PDFs or images")
+    p.add_argument("--dpi", type=int, default=200, help="rasterising resolution for PDFs")
+    p.add_argument("--debug", help="write overlays and field crops to this directory")
+    p.set_defaults(func=cmd_scan)
     return parser
 
 
