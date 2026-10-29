@@ -190,7 +190,23 @@ Progress:
     answers included, so the comparison shows what was missed.
   - **Found:** kf returned a transient 502 to a submission. Submissions are now retried
     on 5xx like GETs: the instanceID makes a repeat a duplicate, never a second record.
-  - Not run yet: on a droplet (`deploy/droplet.sh all`), and with the `vlm` profile.
+  - **Passed on a droplet** (2026-10-29, `s-8vcpu-16gb-amd`, ams3, 12 sheets × 4 profiles
+    each run), without and with the vision model (Gemma 4 E4B Q4_0 + mmproj, llama.cpp
+    CPU): 0 values differ in Kobo, resubmission 202, project deleted. 28 s without the
+    model, 337 s with it.
+    - Text correct: without the model 13–60% (blank ones only; the rest flagged); with it
+      67–87%. Bubbles and digits as before.
+    - **But the model's mistakes are confident:** wrong-and-unflagged went from 0% to
+      3–6% of all fields. In letter boxes it drops thin letters (`OTIENO` → `OTENO`) and
+      reads a gap between boxes as a space (`MENSAH` → `MENS AH`); on Arabic lines it
+      returns plausible wrong words (`مصدر الماء بعيد` → `رضا داود بعيد`). Multi-line
+      comments came back empty (flagged, so safe).
+    - Next: tell the model how many letters were written and where the gaps are (blank
+      cells are known from ink), so spaces come from the boxes, not the model; and don't
+      trust its own confidence: flag text whose length doesn't match the inked boxes, or
+      review all text.
+  - Found on the way: this network blocks outgoing port 22, so `deploy/droplet.sh` has
+    `SSH_PORT=443` (as kobo-in-a-box), and waits for the droplet's IP.
 - **Homepage (asked for 2026-10-29): done.** `/` is a guide for users in kobo-dash's
   (and kobo-mcp's) homepage style, its CSS, fonts and logos copied into
   `web/static/site/`; the forms list moved to `/forms`. Screenshots in
