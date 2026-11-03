@@ -560,6 +560,10 @@ Each one ends with something that runs.
    thresholds and record the accuracy here.
 10. **kobo-in-a-box.** Run as a service on the box's network against its local Kobo and
    llama.cpp, with `offline.sh on`. Repeat the e2e there (the box's Kobo instead of kf).
+   Scheduled in kobo-in-a-box as **W13** (its PLAN 3l, 2026-11-03): a `paper.kobo.local`
+   service, a `paper-forms` Kobo account and an app password from the box's first boot
+   (this app has no sign-in yet), the store in the box's backups, the image in its
+   content pack. Per-user sign-in is phase 2.
 
 ## Open questions
 

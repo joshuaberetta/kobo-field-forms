@@ -76,7 +76,7 @@
 
 <section id="how">
 <h2>How it works</h2>
-<p>Paper Forms turns a <a href="https://www.kobotoolbox.org">KoboToolbox</a> form into sheets designed to be read by a computer: bubbles for choices, a box for each digit, lines for writing. Every page carries four corner markers and a QR code naming the form version, the sheet and the page. When a scan comes back, the markers straighten it and the QR code says exactly where every answer box is, so a crooked phone photo reads as well as a flat scan.</p>
+<p>Paper Forms turns a {% if help_url %}KoboToolbox{% else %}<a href="https://www.kobotoolbox.org">KoboToolbox</a>{% endif %} form into sheets designed to be read by a computer: bubbles for choices, a box for each digit, lines for writing. Every page carries four corner markers and a QR code naming the form version, the sheet and the page. When a scan comes back, the markers straighten it and the QR code says exactly where every answer box is, so a crooked phone photo reads as well as a flat scan.</p>
 <p>The answers are read on the computer this runs on. Choices and numbers need nothing else; handwritten text is read by a vision model if you set one up (see <a href="#reading">How answers are read</a>). Anything unsure goes to a person, who sees the scanned answer next to the reading. Then each sheet is sent to KoboToolbox as one submission, against the form version it was printed from.</p>
 <div class="note"><p>This is a proof of concept. It is tested end to end against KoboToolbox on synthetic sheets; real handwriting reads less well than the tests (see <a href="#limits">Limits</a>).</p></div>
 </section>
@@ -227,7 +227,8 @@
 </details>
 <details>
   <summary>Where do I get help with KoboToolbox itself?</summary>
-  <div><p>The <a href="https://support.kobotoolbox.org">KoboToolbox Help Center</a> covers forms, projects and data, and the <a href="https://community.kobotoolbox.org">community forum</a> is the place for questions.</p></div>
+  {% if help_url %}<div><p>The <a href="{{ help_url }}">guides on this box</a> cover forms, projects and data, with no internet needed.</p></div>
+  {% else %}<div><p>The <a href="https://support.kobotoolbox.org">KoboToolbox Help Center</a> covers forms, projects and data, and the <a href="https://community.kobotoolbox.org">community forum</a> is the place for questions.</p></div>{% endif %}
 </details>
 </section>
 
@@ -244,9 +245,10 @@
     <div>
       <span class="footer__label">KoboToolbox</span>
       <ul>
-        <li><a href="https://www.kobotoolbox.org">kobotoolbox.org</a></li>
+        {% if help_url %}<li><a href="{{ help_url }}">Guides on this box</a></li>
+        {% else %}<li><a href="https://www.kobotoolbox.org">kobotoolbox.org</a></li>
         <li><a href="https://support.kobotoolbox.org">Help Center</a></li>
-        <li><a href="https://community.kobotoolbox.org">Community forum</a></li>
+        <li><a href="https://community.kobotoolbox.org">Community forum</a></li>{% endif %}
       </ul>
     </div>
     <div>

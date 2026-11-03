@@ -1,12 +1,14 @@
 """A local web interface: fetch forms, design and preview sheets, download PDFs, upload
 scans and see how they registered.
 
-Runs on localhost only (`kff web`). The Kobo token stays in this process's environment;
-the browser never sees it. Requests must name a local Host, so a page on another site
-can't reach the app through DNS rebinding.
+Runs on localhost only (`kff web`), or on a closed network behind a password
+(`--allowed-host`, `KFF_WEB_PASSWORD`). The Kobo token stays in this process's
+environment; the browser never sees it. Requests must name a known Host, so a page on
+another site can't reach the app through DNS rebinding.
 """
 
 import base64
+import secrets
 from dataclasses import fields
 from pathlib import Path
 from typing import Annotated, Any
@@ -61,9 +63,37 @@ def options_from(data: dict[str, Any]) -> RenderOptions:
     return RenderOptions(**clean)
 
 
-def create_app(settings: Settings | None = None, extra_hosts: list[str] | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    extra_hosts: list[str] | None = None,
+    *,
+    password: str = "",
+    help_url: str = "",
+) -> FastAPI:
+    """`password`: every request needs it (HTTP basic auth, any username), for a shared
+    network such as kobo-in-a-box's Wi-Fi. `help_url`: where the guide's help links go
+    instead of kobotoolbox.org's sites (e.g. the box's offline library)."""
     settings = settings or Settings.from_env(need_token=False)
     app = FastAPI(title="kobo-field-forms", docs_url=None, redoc_url=None)
+    if password:
+
+        @app.middleware("http")
+        async def require_password(request: Request, call_next):
+            scheme, _, value = request.headers.get("authorization", "").partition(" ")
+            try:
+                given = base64.b64decode(value, validate=True).decode().partition(":")[2]
+            except ValueError:
+                given = ""
+            ok = secrets.compare_digest(given.encode(), password.encode())
+            if scheme.lower() == "basic" and ok:
+                return await call_next(request)
+            return Response(
+                "Paper forms needs its password.",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="Paper forms", charset="UTF-8"'},
+            )
+
+    # Added last, so it runs first: a foreign Host is refused before the password is asked
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS + (extra_hosts or []))
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
@@ -96,7 +126,9 @@ def create_app(settings: Settings | None = None, extra_hosts: list[str] | None =
     def home(request: Request) -> HTMLResponse:
         """The overview for people using it: what it does, how, with screenshots."""
         return templates.TemplateResponse(
-            request, "home.html", {"pages": False, "static": "/static", "home": "/"}
+            request,
+            "home.html",
+            {"pages": False, "static": "/static", "home": "/", "help_url": help_url},
         )
 
     @app.get("/forms", response_class=HTMLResponse)

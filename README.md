@@ -52,6 +52,13 @@ runs on your machine only:
 - **Review & submit:** read a sheet, then check its answers: each field's scan sits next
   to the value read, flagged ones first. Correct or confirm them, then submit to Kobo.
 
+On a closed network where several people share it (kobo-in-a-box serves it at
+`http://paper.kobo.local`, W13 there), put it behind a password and name the host the
+proxy passes on: `KFF_WEB_PASSWORD` (HTTP basic auth, any username),
+`KFF_ALLOWED_HOSTS=paper.kobo.local` (or `--allowed-host`), and `KFF_HELP_URL` to send
+the guide's help links to the box's offline library instead of kobotoolbox.org.
+`KOBO_TOKEN_FILE` reads the token from a mounted file instead of `KOBO_TOKEN`.
+
 `render` writes a PDF (default `out/<uid>-<batch>.pdf`) of numbered sheets. Every page has
 four corner markers and a QR code naming the form version, layout and sheet, so scanned
 pages can be matched back to their form offline. `--layout-json` also writes the layout

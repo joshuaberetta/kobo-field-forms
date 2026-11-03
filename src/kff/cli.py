@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -184,15 +185,22 @@ def cmd_web(args: argparse.Namespace) -> None:
     from kff.web.app import LOCAL_HOSTS, create_app
 
     settings = Settings.from_env(need_token=False)
-    extra = [] if args.host in LOCAL_HOSTS else [args.host]
-    if extra:
+    # Names the app answers to besides localhost: the bind address, and the names a proxy
+    # in front of it passes on (e.g. paper.kobo.local on kobo-in-a-box)
+    named = [h.strip() for h in os.environ.get("KFF_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    extra = ([] if args.host in LOCAL_HOSTS else [args.host]) + args.allowed_host + named
+    password = os.environ.get("KFF_WEB_PASSWORD", "")
+    if extra and not password:
         print(
             f"warning: serving on {args.host}: anyone who can reach it can fetch forms with "
-            "your token and read your scans. Prefer an SSH tunnel to 127.0.0.1.",
+            "your token and read your scans. Prefer an SSH tunnel to 127.0.0.1, or set "
+            "KFF_WEB_PASSWORD.",
             file=sys.stderr,
         )
     print(f"kff web: http://{args.host}:{args.port}/  (store: {settings.home})")
-    uvicorn.run(create_app(settings, extra), host=args.host, port=args.port, log_level="warning")
+    help_url = os.environ.get("KFF_HELP_URL", "")
+    app = create_app(settings, extra, password=password, help_url=help_url)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 def _sheet_ids(store: Store, codes: list[str], every: bool) -> list[str]:
@@ -371,6 +379,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("web", help="local web interface: design, preview, print, scan")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
+    p.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        help="a Host name a proxy in front passes on (repeatable; or KFF_ALLOWED_HOSTS)",
+    )
     p.set_defaults(func=cmd_web)
     return parser
 

@@ -40,6 +40,15 @@ def test_from_env(tmp_path):
     assert "secret-token-value" not in repr(s)
 
 
+def test_token_file(tmp_path):
+    (tmp_path / "token").write_text("from-a-file\n")
+    assert Settings.from_env({"KOBO_TOKEN_FILE": str(tmp_path / "token")}).token == "from-a-file"
+    # KOBO_TOKEN wins; a file that can't be read is an error a user can act on
+    assert Settings.from_env({"KOBO_TOKEN": "env", "KOBO_TOKEN_FILE": "/nope"}).token == "env"
+    with pytest.raises(ConfigError, match="KOBO_TOKEN_FILE"):
+        Settings.from_env({"KOBO_TOKEN_FILE": str(tmp_path / "missing")})
+
+
 def test_missing_token():
     with pytest.raises(ConfigError, match="KOBO_TOKEN"):
         Settings.from_env({})

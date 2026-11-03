@@ -50,6 +50,12 @@ class Settings:
     def from_env(cls, env: dict[str, str] | None = None, *, need_token: bool = True) -> "Settings":
         env = dict(os.environ if env is None else env)
         token = env.get("KOBO_TOKEN", "").strip()
+        if not token and env.get("KOBO_TOKEN_FILE"):
+            # A mounted secret (kobo-in-a-box), so the token isn't in the container's env
+            try:
+                token = Path(env["KOBO_TOKEN_FILE"]).read_text().strip()
+            except OSError as err:
+                raise ConfigError(f"KOBO_TOKEN_FILE can't be read: {err.strerror}.") from None
         if need_token and not token:
             raise ConfigError("KOBO_TOKEN is not set. Get one at <server>/token/ while signed in.")
         try:

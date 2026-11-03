@@ -49,6 +49,29 @@ def test_foreign_host_refused(client):
     assert client.get("/", headers={"Host": "evil.example.com"}).status_code == 400
 
 
+def test_password_and_proxy_host(tmp_path):
+    """On kobo-in-a-box: behind the edge as paper.kobo.local, with a password."""
+    settings = Settings(base_url="http://kf.kobo.local", token="", home=tmp_path)
+    app = create_app(
+        settings, ["paper.kobo.local"], password="abcd-efgh", help_url="http://kobo.local/"
+    )
+    c = TestClient(app, base_url="http://paper.kobo.local")
+    asked = c.get("/")
+    assert asked.status_code == 401 and asked.headers["www-authenticate"].startswith("Basic")
+    assert c.get("/", auth=("anyone", "wrong")).status_code == 401
+    assert c.get("/", headers={"Authorization": "Basic not-base64!"}).status_code == 401
+    home = c.get("/", auth=("paper", "abcd-efgh"))
+    assert home.status_code == 200
+    # Help goes to the box's library, not to sites the box can't reach
+    assert 'href="http://kobo.local/"' in home.text
+    assert "support.kobotoolbox.org" not in home.text
+    assert "community.kobotoolbox.org" not in home.text
+    assert c.get("/static/site/logo-white.svg", auth=("x", "abcd-efgh")).status_code == 200
+    # A foreign Host is still refused, password or not
+    foreign = c.get("/", auth=("paper", "abcd-efgh"), headers={"Host": "evil.example.com"})
+    assert foreign.status_code == 400
+
+
 def test_preview(client):
     resp = client.post(
         f"{BASE}/preview",
